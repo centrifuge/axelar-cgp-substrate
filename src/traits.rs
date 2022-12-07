@@ -16,5 +16,5 @@ use frame_support::weights::Weight;
 /// Weights are calculated using runtime benchmarking features.
 /// See [`benchmarking`] module for more information.
 pub trait WeightInfo {
-    fn temp() -> Weight;
+    fn transfer_operatorship() -> Weight;
 }

@@ -34,6 +34,7 @@ use crate::traits::WeightInfo;
 pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
+    use sp_runtime::ArithmeticError;
 
     use super::*;
 
@@ -73,8 +74,25 @@ pub mod pallet {
     // The macro generates a function on Pallet to deposit an event
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        Temp,
+        OperatorshipTransferred,
     }
+
+
+    // ------------------------------------------------------------------------
+    // Pallet storage
+    // ------------------------------------------------------------------------
+
+    #[pallet::storage]
+    #[pallet::getter(fn current_epoch)]
+    pub(super) type CurrentEpoch<T: Config> = StorageValue<_, u64, ValueQuery>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn hash_for_epoch)]
+    pub(super) type HashForEpoch<T: Config> = StorageMap<_, Blake2_128Concat, u64, T::Hash, ValueQuery>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn epoch_for_hash)]
+    pub(super) type EpochForHash<T: Config> = StorageMap<_, Blake2_128Concat, T::Hash, u64, ValueQuery>;
 
     // ------------------------------------------------------------------------
     // Pallet errors
@@ -88,22 +106,32 @@ pub mod pallet {
     // Pallet dispatchable functions
     // ------------------------------------------------------------------------
 
-    // Declare Call struct and implement dispatchable (or callable) functions.
-    //
-    // Dispatchable functions are transactions modifying the state of the chain. They
-    // are also called extrinsics are constitute the pallet's public interface.
-    // Note that each parameter used in functions must implement `Clone`, `Debug`,
-    // `Eq`, `PartialEq` and `Codec` traits.
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::temp())]
-        pub fn temp(
+        // TODO: Should be internal function only callable from an approved Gateway call
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship())]
+        pub fn transfer_operatorship(
             _origin: OriginFor<T>
         ) -> DispatchResult {
-            Self::deposit_event(Event::Temp);
+            // Add Authorize filter according to the execute strategy
+            Self::validate_operatorship()?;
 
+            let new_operator_hash = T::Hash::default();
+            let epoch = <CurrentEpoch<T>>::get().checked_add(1).ok_or(ArithmeticError::Overflow)?;
+            <CurrentEpoch<T>>::set(epoch);
+            <HashForEpoch<T>>::set(epoch, new_operator_hash);
+            <EpochForHash<T>>::set(new_operator_hash, epoch);
+
+            Self::deposit_event(Event::OperatorshipTransferred);
             Ok(())
         }
     }
+
+    impl<T: Config> Pallet<T> {
+        fn validate_operatorship() -> Result<bool, DispatchError> {
+            Ok(true)
+        }
+    }
+
 } // end of 'pallet' module
 
