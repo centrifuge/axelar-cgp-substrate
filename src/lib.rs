@@ -14,6 +14,7 @@ pub mod traits;
 
 // Re-export pallet components in crate namespace (for runtime construction)
 pub use pallet::*;
+pub use frame_support::{pallet_prelude::*, transactional};
 
 use crate::traits::WeightInfo;
 
@@ -32,8 +33,10 @@ use crate::traits::WeightInfo;
 // pallet itself.
 #[frame_support::pallet]
 pub mod pallet {
+    use ethabi::Token;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
+    use sp_core::H256;
     use sp_runtime::ArithmeticError;
 
     use super::*;
@@ -58,7 +61,7 @@ pub mod pallet {
     /// Note that [`frame_system::Config`] must always be included.
     #[pallet::config]
     pub trait Config: frame_system::Config {
-
+        /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// Weight information for extrinsics in this pallet
@@ -88,11 +91,11 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn hash_for_epoch)]
-    pub(super) type HashForEpoch<T: Config> = StorageMap<_, Blake2_128Concat, u64, T::Hash, ValueQuery>;
+    pub(super) type HashForEpoch<T: Config> = StorageMap<_, Blake2_128Concat, u64, H256, ValueQuery>;
 
     #[pallet::storage]
     #[pallet::getter(fn epoch_for_hash)]
-    pub(super) type EpochForHash<T: Config> = StorageMap<_, Blake2_128Concat, T::Hash, u64, ValueQuery>;
+    pub(super) type EpochForHash<T: Config> = StorageMap<_, Blake2_128Concat, H256, u64, ValueQuery>;
 
     // ------------------------------------------------------------------------
     // Pallet errors
@@ -100,6 +103,10 @@ pub mod pallet {
 
     #[pallet::error]
     pub enum Error<T> {
+        InvalidOperators,
+        InvalidWeights,
+        InvalidThreshold,
+        DuplicateOperators
     }
 
     // ------------------------------------------------------------------------
@@ -110,26 +117,67 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         // TODO: Should be internal function only callable from an approved Gateway call
         #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship())]
+        #[transactional]
         pub fn transfer_operatorship(
-            _origin: OriginFor<T>
+            _origin: OriginFor<T>,
+            new_operators: Vec<[u8; 20]>,
+            new_weights: Vec<u128>,
+            new_threshold: u128
         ) -> DispatchResult {
-            // Add Authorize filter according to the execute strategy
-            Self::validate_operatorship()?;
+            // TODO: Add Authorize filter according to the execute strategy
+            let new_operator_hash = Self::validate_operatorship(new_operators, new_weights, new_threshold)?;
 
-            let new_operator_hash = T::Hash::default();
+            ensure!(!<EpochForHash<T>>::contains_key(new_operator_hash), Error::<T>::DuplicateOperators);
+
             let epoch = <CurrentEpoch<T>>::get().checked_add(1).ok_or(ArithmeticError::Overflow)?;
             <CurrentEpoch<T>>::set(epoch);
             <HashForEpoch<T>>::set(epoch, new_operator_hash);
             <EpochForHash<T>>::set(new_operator_hash, epoch);
 
             Self::deposit_event(Event::OperatorshipTransferred);
+
             Ok(())
         }
     }
 
     impl<T: Config> Pallet<T> {
-        fn validate_operatorship() -> Result<bool, DispatchError> {
-            Ok(true)
+        fn validate_operatorship(new_operators: Vec<[u8; 20]>, new_weights: Vec<u128>, new_threshold: u128) -> Result<H256, DispatchError> {
+            let operators_length = new_operators.len();
+            let weights_length = new_weights.len();
+
+            ensure!(operators_length != 0 && Self::is_sorted_asc_and_contains_no_duplicates(new_operators.clone()), Error::<T>::InvalidOperators);
+            ensure!(operators_length == weights_length,Error::<T>::InvalidWeights);
+
+            let mut total_weight = 0;
+            for i in 0..weights_length {
+                total_weight += new_weights[i];
+            }
+
+            ensure!(new_threshold != 0 && total_weight >= new_threshold, Error::<T>::InvalidThreshold);
+
+            let mut operators_token: Vec<Token> = vec![];
+            for i in 0..operators_length {
+                operators_token.push(Token::Address(new_operators[i].into()));
+            }
+
+            let mut weights_token: Vec<Token> = vec![];
+            for i in 0..weights_length {
+                weights_token.push(Token::Uint(new_weights[i].into()));
+            }
+
+            let params = ethabi::encode(&[Token::Array(operators_token), Token::Array(weights_token), Token::Uint(new_threshold.into())]);
+
+            Ok(sp_io::hashing::keccak_256(&params).into())
+        }
+
+        fn is_sorted_asc_and_contains_no_duplicates(accounts: Vec<[u8; 20]>) -> bool {
+            for i in 0..accounts.len() - 1 {
+                if accounts[i] >= accounts[i + 1] {
+                    return false;
+                }
+            }
+
+            accounts[0] != [0; 20]
         }
     }
 
