@@ -78,6 +78,7 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         OperatorshipTransferred,
+        SomeOtherEvent,
     }
 
     // ------------------------------------------------------------------------
@@ -132,6 +133,11 @@ pub mod pallet {
             ensure!(
                 !<EpochForHash<T>>::contains_key(new_operator_hash),
                 Error::<T>::DuplicateOperators
+            );
+
+            ensure!(
+                !<EpochForHash<T>>::contains_key(new_operator_hash),
+                Error::<T>::InvalidOperators
             );
 
             let epoch = <CurrentEpoch<T>>::get()

@@ -10,11 +10,16 @@ edition = "2021"
 #[package.metadata.wasm-pack.profile.release]
 ## `wasm-opt` has some problems on linux, see
 ## https://github.com/rustwasm/wasm-pack/issues/781 etc.
-#wasm-opt = false
+wasm-opt = false
 
-[[bin]]
-name = "axelar-cgp"
+[lib]
+name = "axelar_cgp"
 path = "gateway/src/lib.rs"
 
 [workspace]
-members = ["gateway"]
+members = ["gateway", "libs/proof"]
+
+[features]
+default = ['std']
+std = []
+runtime-benchmarks = []
