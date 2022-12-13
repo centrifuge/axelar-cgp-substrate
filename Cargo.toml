@@ -19,7 +19,12 @@ path = "gateway/src/lib.rs"
 [workspace]
 members = ["gateway", "libs/proof"]
 
+[dependencies]
+axelar-cgp = { path = "gateway", default-features = true }
+axelar-cgp-proof = { path = "libs/proof" }
+
+
 [features]
 default = ['std']
-std = []
+std = ['axelar-cgp/std']
 runtime-benchmarks = []
