@@ -48,18 +48,17 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Event<T>} = 2,
-	}
+    pub enum Runtime where
+        Block = Block,
+        NodeBlock = Block,
+        UncheckedExtrinsic = UncheckedExtrinsic,
+    {
+        System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+        AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Event<T>} = 2,
+    }
 );
 
 pub const ALICE: AccountId = 1;
-pub const BOB: AccountId = 2;
 
 pub struct ExtBuilder;
 
@@ -79,4 +78,21 @@ impl ExtBuilder {
         ext.execute_with(|| System::set_block_number(1));
         ext
     }
+}
+
+pub fn event_exists<E: Into<RuntimeEvent>>(e: E) {
+    let actual: Vec<RuntimeEvent> = frame_system::Pallet::<Runtime>::events()
+        .iter()
+        .map(|e| e.event.clone())
+        .collect();
+
+    let e: RuntimeEvent = e.into();
+    let mut exists = false;
+    for evt in actual {
+        if evt == e {
+            exists = true;
+            break;
+        }
+    }
+    assert!(exists);
 }

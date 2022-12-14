@@ -18,7 +18,10 @@ pub use pallet::*;
 
 use crate::traits::WeightInfo;
 
+#[cfg(test)]
 mod mock;
+#[cfg(test)]
+mod tests;
 
 // ----------------------------------------------------------------------------
 // Type aliases
@@ -79,7 +82,10 @@ pub mod pallet {
     // The macro generates a function on Pallet to deposit an event
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        OperatorshipTransferred,
+        OperatorshipTransferred {
+            new_operator_hash: H256,
+            new_epoch: u64,
+        },
     }
 
     // ------------------------------------------------------------------------
@@ -143,14 +149,17 @@ pub mod pallet {
             <HashForEpoch<T>>::set(epoch, new_operator_hash);
             <EpochForHash<T>>::set(new_operator_hash, epoch);
 
-            Self::deposit_event(Event::OperatorshipTransferred);
+            Self::deposit_event(Event::OperatorshipTransferred {
+                new_operator_hash,
+                new_epoch: epoch,
+            });
 
             Ok(())
         }
     }
 
     impl<T: Config> Pallet<T> {
-        fn validate_operatorship(
+        pub fn validate_operatorship(
             new_operators: Vec<[u8; 20]>,
             new_weights: Vec<u128>,
             new_threshold: u128,
@@ -208,29 +217,3 @@ pub mod pallet {
         }
     }
 } // end of 'pallet' module
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use mock::*;
-
-    #[test]
-    fn accounts_ordered() {
-        ExtBuilder::default().build().execute_with(|| {
-            // Empty Address error
-            let mut input: Vec<[u8; 20]> = vec![[0; 20], [2; 20]];
-            let result = AxelarGateway::is_sorted_asc_and_contains_no_duplicates(input);
-            assert!(!result);
-
-            // Wrong order - Desc
-            input = vec![[2; 20], [1; 20]];
-            let result = AxelarGateway::is_sorted_asc_and_contains_no_duplicates(input);
-            assert!(!result);
-
-            // Success
-            input = vec![[1; 20], [2; 20]];
-            let result = AxelarGateway::is_sorted_asc_and_contains_no_duplicates(input);
-            assert!(result);
-        });
-    }
-}
