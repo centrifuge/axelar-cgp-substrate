@@ -17,5 +17,6 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           default: true
+          components: rustfmt
       - name: fmt check
         run: cargo fmt -- --check
