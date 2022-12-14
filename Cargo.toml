@@ -1,5 +1,2 @@
 [workspace]
-members = [
-    "gateway",
-    "libs/proof"
-]
+members = ["gateway", "libs/proof"]
