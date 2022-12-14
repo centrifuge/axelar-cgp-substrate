@@ -23,6 +23,21 @@ pub struct OperatorsState {
 /// Original implementation in Solidity:
 /// https://github.com/axelarnetwork/axelar-cgp-solidity/blob/main/contracts/auth/AxelarAuthWeighted.sol#L28
 pub fn validate(_msg_hash: Bytes32, _proof: Bytes, _state: OperatorsState) -> bool {
+    // (address[] memory operators, uint256[] memory weights, uint256 threshold, bytes[] memory signatures) = abi.decode(
+    //     proof,
+    //     (address[], uint256[], uint256, bytes[])
+    // );
+    //
+    // bytes32 operatorsHash = keccak256(abi.encode(operators, weights, threshold));
+    // uint256 operatorsEpoch = epochForHash[operatorsHash];
+    // uint256 epoch = currentEpoch;
+    //
+    // if (operatorsEpoch == 0 || epoch - operatorsEpoch >= OLD_KEY_RETENTION) revert InvalidOperators();
+    //
+    // _validateSignatures(messageHash, operators, weights, threshold, signatures);
+    //
+    // return operatorsEpoch == epoch;
+
     false
 }
 
