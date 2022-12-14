@@ -18,6 +18,8 @@ pub use pallet::*;
 
 use crate::traits::WeightInfo;
 
+mod mock;
+
 // ----------------------------------------------------------------------------
 // Type aliases
 // ----------------------------------------------------------------------------
@@ -195,7 +197,7 @@ pub mod pallet {
             Ok(sp_io::hashing::keccak_256(&params).into())
         }
 
-        fn is_sorted_asc_and_contains_no_duplicates(accounts: Vec<[u8; 20]>) -> bool {
+        pub fn is_sorted_asc_and_contains_no_duplicates(accounts: Vec<[u8; 20]>) -> bool {
             for i in 0..accounts.len() - 1 {
                 if accounts[i] >= accounts[i + 1] {
                     return false;
@@ -206,3 +208,29 @@ pub mod pallet {
         }
     }
 } // end of 'pallet' module
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mock::*;
+
+    #[test]
+    fn accounts_ordered() {
+        ExtBuilder::default().build().execute_with(|| {
+            // Empty Address error
+            let mut input: Vec<[u8; 20]> = vec![[0; 20], [2; 20]];
+            let result = AxelarGateway::is_sorted_asc_and_contains_no_duplicates(input);
+            assert!(!result);
+
+            // Wrong order - Desc
+            input = vec![[2; 20], [1; 20]];
+            let result = AxelarGateway::is_sorted_asc_and_contains_no_duplicates(input);
+            assert!(!result);
+
+            // Success
+            input = vec![[1; 20], [2; 20]];
+            let result = AxelarGateway::is_sorted_asc_and_contains_no_duplicates(input);
+            assert!(result);
+        });
+    }
+}
