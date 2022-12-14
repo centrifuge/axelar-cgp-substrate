@@ -73,8 +73,8 @@ fn transfer_operatorship() {
             Error::<Runtime>::InvalidOperators,
         );
 
-        let mut new_operators = vec![[1; 20], [2; 20], [3; 20]];
-        let mut new_weights = vec![10u128, 10u128, 20u128];
+        let new_operators = vec![[1; 20], [2; 20], [3; 20]];
+        let new_weights = vec![10u128, 10u128, 20u128];
         let precomputed_hash = H256::from([
             232, 1, 82, 130, 189, 175, 253, 64, 101, 205, 209, 35, 92, 250, 52, 60, 120, 107, 11,
             183, 201, 98, 82, 106, 176, 13, 108, 109, 18, 47, 214, 160,
