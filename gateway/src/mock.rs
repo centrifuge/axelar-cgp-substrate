@@ -37,6 +37,13 @@ impl frame_system::Config for Runtime {
     type MaxConsumers = ConstU32<16>;
 }
 
+impl pallet_utility::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeCall = RuntimeCall;
+    type PalletsOrigin = OriginCaller;
+    type WeightInfo = ();
+}
+
 impl Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -52,7 +59,8 @@ construct_runtime!(
         UncheckedExtrinsic = UncheckedExtrinsic,
     {
         System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-        AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Event<T>} = 2,
+        Utility: pallet_utility::{Pallet, Call, Event},
+        AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Event<T>} = 3,
     }
 );
 

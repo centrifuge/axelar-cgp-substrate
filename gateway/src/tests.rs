@@ -85,7 +85,6 @@ fn transfer_operatorship() {
         EpochForHash::<Runtime>::insert(precomputed_hash, new_epoch);
         assert_noop!(
             AxelarGateway::transfer_operatorship(
-                RuntimeOrigin::signed(ALICE),
                 new_operators.clone(),
                 new_weights.clone(),
                 20u128
@@ -96,7 +95,6 @@ fn transfer_operatorship() {
         // Remove hash
         EpochForHash::<Runtime>::remove(precomputed_hash);
         assert_ok!(AxelarGateway::transfer_operatorship(
-            RuntimeOrigin::signed(ALICE),
             new_operators.clone(),
             new_weights.clone(),
             20u128

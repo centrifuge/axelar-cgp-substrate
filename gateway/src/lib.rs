@@ -13,7 +13,6 @@
 pub mod traits;
 
 // Re-export pallet components in crate namespace (for runtime construction)
-pub use frame_support::{pallet_prelude::*, transactional};
 pub use pallet::*;
 
 use crate::traits::WeightInfo;
@@ -69,7 +68,7 @@ pub mod pallet {
     /// depends on other super-traits, the latter must be added to this trait,
     /// Note that [`frame_system::Config`] must always be included.
     #[pallet::config]
-    pub trait Config: frame_system::Config {
+    pub trait Config: frame_system::Config + pallet_utility::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -147,16 +146,43 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        // TODO: Should be internal function only callable from an approved Gateway call
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship())]
-        #[transactional]
+        #[pallet::weight({
+            let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
+            let dispatch_weight = dispatch_infos.iter()
+                .map(|di| di.weight)
+                .fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
+                .saturating_add(<T as pallet::Config>::WeightInfo::batch(calls.len() as u32));
+            let dispatch_class = {
+                let all_operational = dispatch_infos.iter()
+                    .map(|di| di.class)
+                    .all(|class| class == DispatchClass::Operational);
+                if all_operational {
+                    DispatchClass::Operational
+                } else {
+                    DispatchClass::Normal
+                }
+            };
+            (dispatch_weight, dispatch_class)
+        })]
+        pub fn execute(
+            origin: OriginFor<T>,
+            _proof: u64,
+            calls: Vec<<T as pallet_utility::Config>::RuntimeCall>,
+        ) -> DispatchResultWithPostInfo {
+            let _ = ensure_signed(origin)?;
+            // Verify batch proof
+            //
+            let gatewayOrigin;
+            pallet_utility::Pallet::<T>::batch(gatewayOrigin, calls)
+        }
+    }
+
+    impl<T: Config> Pallet<T> {
         pub fn transfer_operatorship(
-            _origin: OriginFor<T>,
             new_operators: Vec<[u8; 20]>,
             new_weights: Vec<u128>,
             new_threshold: u128,
         ) -> DispatchResult {
-            // TODO: Add Authorize filter according to the execute strategy
             let new_operator_hash =
                 Self::validate_operatorship(new_operators, new_weights, new_threshold)?;
 
@@ -179,9 +205,7 @@ pub mod pallet {
 
             Ok(())
         }
-    }
 
-    impl<T: Config> Pallet<T> {
         pub fn validate_operatorship(
             new_operators: Vec<[u8; 20]>,
             new_weights: Vec<u128>,
