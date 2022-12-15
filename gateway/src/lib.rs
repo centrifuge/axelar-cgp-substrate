@@ -18,6 +18,11 @@ pub use pallet::*;
 
 use crate::traits::WeightInfo;
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+
 // ----------------------------------------------------------------------------
 // Type aliases
 // ----------------------------------------------------------------------------
@@ -77,7 +82,10 @@ pub mod pallet {
     // The macro generates a function on Pallet to deposit an event
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        OperatorshipTransferred,
+        OperatorshipTransferred {
+            new_operator_hash: H256,
+            new_epoch: u64,
+        },
     }
 
     // ------------------------------------------------------------------------
@@ -141,14 +149,17 @@ pub mod pallet {
             <HashForEpoch<T>>::set(epoch, new_operator_hash);
             <EpochForHash<T>>::set(new_operator_hash, epoch);
 
-            Self::deposit_event(Event::OperatorshipTransferred);
+            Self::deposit_event(Event::OperatorshipTransferred {
+                new_operator_hash,
+                new_epoch: epoch,
+            });
 
             Ok(())
         }
     }
 
     impl<T: Config> Pallet<T> {
-        fn validate_operatorship(
+        pub fn validate_operatorship(
             new_operators: Vec<[u8; 20]>,
             new_weights: Vec<u128>,
             new_threshold: u128,
@@ -195,7 +206,7 @@ pub mod pallet {
             Ok(sp_io::hashing::keccak_256(&params).into())
         }
 
-        fn is_sorted_asc_and_contains_no_duplicates(accounts: Vec<[u8; 20]>) -> bool {
+        pub fn is_sorted_asc_and_contains_no_duplicates(accounts: Vec<[u8; 20]>) -> bool {
             for i in 0..accounts.len() - 1 {
                 if accounts[i] >= accounts[i + 1] {
                     return false;
