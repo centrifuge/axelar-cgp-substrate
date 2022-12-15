@@ -5,8 +5,6 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
 
-// use super::*;
-
 use crate::{self as pallet_axelar_cgp, Config};
 
 pub type AccountId = u128;
