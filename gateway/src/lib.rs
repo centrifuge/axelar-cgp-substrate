@@ -14,7 +14,10 @@ pub mod traits;
 
 // Re-export pallet components in crate namespace (for runtime construction)
 pub use pallet::*;
-
+use frame_support::{PalletId, transactional};
+use frame_support::traits::EnsureOrigin;
+use sp_core::Get;
+use sp_runtime::traits::AccountIdConversion;
 use crate::traits::WeightInfo;
 
 #[cfg(test)]
@@ -43,9 +46,11 @@ pub mod pallet {
     use crate::proof::operators_hash;
     use ethabi::Token;
     use frame_support::pallet_prelude::*;
+    use frame_support::traits::OriginTrait;
     use frame_system::pallet_prelude::*;
     use sp_core::H256;
     use sp_runtime::ArithmeticError;
+    use sp_runtime::traits::AccountIdConversion;
 
     use super::*;
 
@@ -69,6 +74,10 @@ pub mod pallet {
     /// Note that [`frame_system::Config`] must always be included.
     #[pallet::config]
     pub trait Config: frame_system::Config + pallet_utility::Config {
+        /// The Gateway Origin Pallet Identifier
+        #[pallet::constant]
+        type PalletId: Get<PalletId>;
+
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -170,19 +179,22 @@ pub mod pallet {
             calls: Vec<<T as pallet_utility::Config>::RuntimeCall>,
         ) -> DispatchResultWithPostInfo {
             let _ = ensure_signed(origin)?;
-            // Verify batch proof
-            //
-            let gatewayOrigin;
-            pallet_utility::Pallet::<T>::batch(gatewayOrigin, calls)
+            // PLACEHOLDER: Verify command batch proof
+            let gateway_id = T::PalletId::get().into_account_truncating();
+            pallet_utility::Pallet::<T>::batch(T::RuntimeOrigin::signed(gateway_id), calls)
         }
-    }
 
-    impl<T: Config> Pallet<T> {
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship())]
+        #[transactional]
         pub fn transfer_operatorship(
+            origin: OriginFor<T>,
             new_operators: Vec<[u8; 20]>,
             new_weights: Vec<u128>,
             new_threshold: u128,
         ) -> DispatchResult {
+            // Ensure only gateway origin can call this
+            let _ = EnsureGateway::ensure_origin(origin)?;
+
             let new_operator_hash =
                 Self::validate_operatorship(new_operators, new_weights, new_threshold)?;
 
@@ -205,6 +217,9 @@ pub mod pallet {
 
             Ok(())
         }
+    }
+
+    impl<T: Config> Pallet<T> {
 
         pub fn validate_operatorship(
             new_operators: Vec<[u8; 20]>,
@@ -295,3 +310,19 @@ pub mod pallet {
     }
 }
 // end of 'pallet' module
+
+pub struct EnsureGateway<T>(sp_std::marker::PhantomData<T>);
+impl<T: pallet::Config> EnsureOrigin<T::RuntimeOrigin> for EnsureGateway<T> {
+    type Success = T::AccountId;
+
+    fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
+        let gateway_id = T::PalletId::get().into_account_truncating();
+        o.into().and_then(|o| match o {
+            T::RuntimeOrigin::signed(who) if who == gateway_id => Ok(gateway_id),
+            r => Err(T::RuntimeOrigin::from(r)),
+        })
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn successful_origin() -> T::RuntimeOrigin {unimplemented!()}
+}

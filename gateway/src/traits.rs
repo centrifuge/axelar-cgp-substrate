@@ -17,7 +17,7 @@ use frame_support::weights::{constants::RocksDbWeight, Weight};
 /// See [`benchmarking`] module for more information.
 pub trait WeightInfo {
     fn execute() -> Weight;
-    fn batch(c: u32, ) -> Weight;
+    fn transfer_operatorship(c: u32, ) -> Weight;
 }
 
 // For backwards compatibility and tests
@@ -27,7 +27,7 @@ impl WeightInfo for () {
             .saturating_add(RocksDbWeight::get().reads(3_u64))
             .saturating_add(RocksDbWeight::get().writes(1_u64))
     }
-    fn batch(c: u32, ) -> Weight {
+    fn transfer_operatorship(c: u32, ) -> Weight {
         // Minimum execution time: 14_470 nanoseconds.
         Weight::from_ref_time(17_443_346 as u64)
             // Standard Error: 2_037
