@@ -157,6 +157,8 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
+        // Weight definition taken from Substrate Utility.batch, not sure if there is a more succinct and maintainable
+        // way to ensure the call is properly weighted
         #[pallet::weight({
             let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
             let dispatch_weight = dispatch_infos.iter()

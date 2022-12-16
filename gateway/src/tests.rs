@@ -70,6 +70,7 @@ fn validate_operatorship_params() {
 #[test]
 fn transfer_operatorship() {
     ExtBuilder::default().build().execute_with(|| {
+        // Wrong Origin
         assert_noop!(
             AxelarGateway::transfer_operatorship(
                 RuntimeOrigin::signed(ALICE),
