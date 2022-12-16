@@ -13,12 +13,13 @@
 pub mod traits;
 
 // Re-export pallet components in crate namespace (for runtime construction)
-pub use pallet::*;
-use frame_support::{PalletId, transactional};
+use crate::traits::WeightInfo;
+use frame_support::dispatch::RawOrigin;
 use frame_support::traits::EnsureOrigin;
+use frame_support::{transactional, PalletId};
+pub use pallet::*;
 use sp_core::Get;
 use sp_runtime::traits::AccountIdConversion;
-use crate::traits::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -45,12 +46,13 @@ pub const OLD_KEY_RETENTION: u64 = 16;
 pub mod pallet {
     use crate::proof::operators_hash;
     use ethabi::Token;
+    use frame_support::dispatch::RawOrigin;
     use frame_support::pallet_prelude::*;
-    use frame_support::traits::OriginTrait;
     use frame_system::pallet_prelude::*;
+    use pallet_utility::WeightInfo as UtilityWeightInfo;
     use sp_core::H256;
-    use sp_runtime::ArithmeticError;
     use sp_runtime::traits::AccountIdConversion;
+    use sp_runtime::ArithmeticError;
 
     use super::*;
 
@@ -160,7 +162,7 @@ pub mod pallet {
             let dispatch_weight = dispatch_infos.iter()
                 .map(|di| di.weight)
                 .fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
-                .saturating_add(<T as pallet::Config>::WeightInfo::batch(calls.len() as u32));
+                .saturating_add(<pallet_utility::weights::SubstrateWeight<T> as UtilityWeightInfo>::batch(calls.len() as u32));
             let dispatch_class = {
                 let all_operational = dispatch_infos.iter()
                     .map(|di| di.class)
@@ -180,11 +182,10 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             let _ = ensure_signed(origin)?;
             // PLACEHOLDER: Verify command batch proof
-            let gateway_id = T::PalletId::get().into_account_truncating();
-            pallet_utility::Pallet::<T>::batch(T::RuntimeOrigin::signed(gateway_id), calls)
+            pallet_utility::Pallet::<T>::batch(RawOrigin::Signed(Self::account_id()).into(), calls)
         }
 
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship())]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship(new_operators.len() as u32))]
         #[transactional]
         pub fn transfer_operatorship(
             origin: OriginFor<T>,
@@ -193,7 +194,7 @@ pub mod pallet {
             new_threshold: u128,
         ) -> DispatchResult {
             // Ensure only gateway origin can call this
-            let _ = EnsureGateway::ensure_origin(origin)?;
+            let _ = EnsureGateway::<T>::ensure_origin(origin)?;
 
             let new_operator_hash =
                 Self::validate_operatorship(new_operators, new_weights, new_threshold)?;
@@ -220,6 +221,9 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
+        pub fn account_id() -> T::AccountId {
+            T::PalletId::get().into_account_truncating()
+        }
 
         pub fn validate_operatorship(
             new_operators: Vec<[u8; 20]>,
@@ -318,11 +322,13 @@ impl<T: pallet::Config> EnsureOrigin<T::RuntimeOrigin> for EnsureGateway<T> {
     fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
         let gateway_id = T::PalletId::get().into_account_truncating();
         o.into().and_then(|o| match o {
-            T::RuntimeOrigin::signed(who) if who == gateway_id => Ok(gateway_id),
+            RawOrigin::Signed(who) if who == gateway_id => Ok(gateway_id),
             r => Err(T::RuntimeOrigin::from(r)),
         })
     }
 
     #[cfg(feature = "runtime-benchmarks")]
-    fn successful_origin() -> T::RuntimeOrigin {unimplemented!()}
+    fn successful_origin() -> T::RuntimeOrigin {
+        unimplemented!()
+    }
 }

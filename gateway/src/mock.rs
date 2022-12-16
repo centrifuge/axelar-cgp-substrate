@@ -1,13 +1,14 @@
 use frame_support::{
-    construct_runtime,
+    construct_runtime, parameter_types,
     traits::{ConstU32, ConstU64, Everything},
+    PalletId,
 };
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
 
 use crate::{self as pallet_axelar_cgp, Config};
 
-pub type AccountId = u128;
+pub type AccountId = u64;
 pub type BlockNumber = u64;
 
 impl frame_system::Config for Runtime {
@@ -44,7 +45,12 @@ impl pallet_utility::Config for Runtime {
     type WeightInfo = ();
 }
 
+parameter_types! {
+    pub const GatewayPalletId: PalletId = crate::traits::GATEWAY_PALLET_ID;
+}
+
 impl Config for Runtime {
+    type PalletId = GatewayPalletId;
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
 }

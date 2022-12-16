@@ -2,6 +2,9 @@ use super::*;
 use frame_support::{assert_noop, assert_ok};
 use mock::*;
 use sp_core::{keccak_256, H256};
+use pallet::Call as AxelarGatewayCall;
+use pallet_utility::Event as UtilityEvent;
+use sp_runtime::traits::BadOrigin;
 
 #[test]
 fn accounts_ordered() {
@@ -67,9 +70,25 @@ fn validate_operatorship_params() {
 #[test]
 fn transfer_operatorship() {
     ExtBuilder::default().build().execute_with(|| {
+        assert_noop!(
+            AxelarGateway::transfer_operatorship(
+                RuntimeOrigin::signed(ALICE),
+                vec![],
+                vec![],
+                0u128
+            ),
+            BadOrigin,
+        );
+
+        let gw_account_id = AxelarGateway::account_id();
         // new_operators vector is empty
         assert_noop!(
-            AxelarGateway::validate_operatorship(vec![], vec![], 0u128),
+            AxelarGateway::transfer_operatorship(
+                RuntimeOrigin::signed(gw_account_id),
+                vec![],
+                vec![],
+                0u128
+            ),
             Error::<Runtime>::InvalidOperators,
         );
 
@@ -85,6 +104,7 @@ fn transfer_operatorship() {
         EpochForHash::<Runtime>::insert(precomputed_hash, new_epoch);
         assert_noop!(
             AxelarGateway::transfer_operatorship(
+                RuntimeOrigin::signed(gw_account_id),
                 new_operators.clone(),
                 new_weights.clone(),
                 20u128
@@ -95,6 +115,7 @@ fn transfer_operatorship() {
         // Remove hash
         EpochForHash::<Runtime>::remove(precomputed_hash);
         assert_ok!(AxelarGateway::transfer_operatorship(
+            RuntimeOrigin::signed(gw_account_id),
             new_operators.clone(),
             new_weights.clone(),
             20u128
@@ -166,5 +187,29 @@ fn validate_proof_not_current_epoch() {
             AxelarGateway::validate_proof(msg_hash, &raw_proof),
             Ok(false)
         );
+    });
+}
+
+// This is a simple test that shows how to call the execute wrapping the inner calls for the batch
+// + proofs. We can extend this structure once we have the proof validation in.
+#[test]
+fn simple_execute_batch() {
+    ExtBuilder::default().build().execute_with(|| {
+        // Invalid Operators
+        let inner_call = RuntimeCall::AxelarGateway(AxelarGatewayCall::transfer_operatorship {
+            new_operators: vec![],
+            new_weights: vec![],
+            new_threshold: 0u128,
+        });
+
+        assert_ok!(AxelarGateway::execute(
+            RuntimeOrigin::signed(ALICE),
+            0u64,
+            vec![inner_call]
+        ),);
+        event_exists(UtilityEvent::BatchInterrupted {
+            index: 0,
+            error: Error::<Runtime>::InvalidOperators.into(),
+        });
     });
 }
