@@ -18,8 +18,6 @@ use frame_support::dispatch::RawOrigin;
 use frame_support::traits::EnsureOrigin;
 use frame_support::{transactional, PalletId};
 pub use pallet::*;
-use sp_core::Get;
-use sp_runtime::traits::AccountIdConversion;
 
 #[cfg(test)]
 mod mock;
@@ -322,7 +320,7 @@ impl<T: pallet::Config> EnsureOrigin<T::RuntimeOrigin> for EnsureGateway<T> {
     type Success = T::AccountId;
 
     fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-        let gateway_id = T::PalletId::get().into_account_truncating();
+        let gateway_id = Pallet::<T>::account_id();
         o.into().and_then(|o| match o {
             RawOrigin::Signed(who) if who == gateway_id => Ok(gateway_id),
             r => Err(T::RuntimeOrigin::from(r)),
