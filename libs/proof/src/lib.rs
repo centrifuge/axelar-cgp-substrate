@@ -4,33 +4,53 @@
 //!
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
+
+use alloc::boxed::Box;
+use ethabi::ParamType;
+
+use sp_core::H256;
 use sp_std::vec::Vec;
 
 // ----------------------------------------------------------------------------
 // Custom types and type aliases
 // ----------------------------------------------------------------------------
-type Bytes = Vec<u8>;
+type Bytes = [u8];
 type Bytes32 = [u8; 32];
+type EthAddress = [u8; 20];
 
 pub struct OperatorsState {
-    pub hash: Bytes32,
-    //todo(nuno): epoch is unit256 in solidity
-    pub epoch: u128,
+    pub hash: H256,
+    pub epoch: u64,
 }
 
 /// @dev This function takes messageHash and proof data and reverts if proof is invalid
 /// @return True if provided operators are the current ones
 /// Original implementation in Solidity:
 /// https://github.com/axelarnetwork/axelar-cgp-solidity/blob/main/contracts/auth/AxelarAuthWeighted.sol#L28
-pub fn validate(_msg_hash: Bytes32, _proof: Bytes, _state: OperatorsState) -> bool {
+pub fn validate(_msg_hash: H256, proof: &Bytes, state: OperatorsState) -> bool {
     // (address[] memory operators, uint256[] memory weights, uint256 threshold, bytes[] memory signatures) = abi.decode(
     //     proof,
     //     (address[], uint256[], uint256, bytes[])
     // );
+
+    // let (operators, weights, threshold, signatures)
+    let xs = ethabi::decode(
+        &[
+            ParamType::Address,
+            ParamType::Uint(usize::MAX), // weights
+            ParamType::Uint(usize::MAX), // threshold
+            ParamType::Bytes, // signatures
+        ],
+        proof,
+    )
+    .expect("todo(nuno)");
+
     //
     // bytes32 operatorsHash = keccak256(abi.encode(operators, weights, threshold));
     // uint256 operatorsEpoch = epochForHash[operatorsHash];
     // uint256 epoch = currentEpoch;
+
     //
     // if (operatorsEpoch == 0 || epoch - operatorsEpoch >= OLD_KEY_RETENTION) revert InvalidOperators();
     //
@@ -41,23 +61,80 @@ pub fn validate(_msg_hash: Bytes32, _proof: Bytes, _state: OperatorsState) -> bo
     false
 }
 
+fn decode(payload: &[u8]) -> Result<Vec<ethabi::Token>, ethabi::Error> {
+    ethabi::decode(
+        &[
+            // operator's addresses
+            ParamType::Array(Box::new(ParamType::Address)),
+            // weights
+            ParamType::Array(Box::new(ParamType::Uint(usize::MAX))),
+            // threshold
+            ParamType::Uint(usize::MAX),
+            // signatures
+            ParamType::Array(Box::new(ParamType::Bytes)),
+        ],
+        payload,
+    )
+}
+
 // ----------------------------------------------------------------------------
 // Tests
 // ----------------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
+    use ethabi::Token;
     use super::*;
     use sp_std::vec;
 
+    fn encode(operators: Vec<[u8; 20]>, weights: Vec<u128>, threshold: u128, signatures: Vec<Vec<u8>>) -> ethabi::Bytes {
+        let operators_token = operators.into_iter().map(|x| Token::Address(x.into())).collect();
+        let weights_token = weights.into_iter().map(|x| Token::Uint(x.into())).collect();
+        let signatures_token = signatures.into_iter().map(|x| Token::Bytes(x)).collect();
+
+        ethabi::encode(&[
+            Token::Array(operators_token),
+            Token::Array(weights_token),
+            Token::Uint(threshold.into()),
+            Token::Array(signatures_token),
+        ])
+    }
+
     #[test]
-    fn it_works() {
-        let msg_hash = [0u8; 32];
-        let proof = vec![1, 2, 3];
+    fn proof_encode_decode() {
+        let msg_hash = H256::zero();
+        let proof = &[1, 2, 3];
         let state = OperatorsState {
-            hash: [1u8; 32],
-            epoch: u128::MAX,
+            hash: H256::zero(),
+            epoch: u64::MAX,
         };
 
-        assert_eq!(validate(msg_hash, proof, state), false)
+        // Input params
+        let operators = vec![[1u8; 20], [2u8; 20]];
+        let weights = vec![100, 200];
+        let threshold = 99;
+        let signatures = vec![vec![1], vec![2]];
+
+        // Encode
+        let encoded = encode(operators.clone(), weights.clone(), threshold, signatures.clone());
+
+        // Now decode
+        let decoded = decode(&encoded).expect("Should decode");
+
+        if let [Token::Array(operators_token), Token::Array(weights_token), threshold_token, Token::Array(signatures_token)] = decoded.as_slice() {
+            let expected_operators: Vec<Token> = operators.into_iter().map(|x| Token::Address(x.into())).collect();
+            assert_eq!(operators_token.clone(), expected_operators);
+
+            let expected_weights: Vec<Token> = weights.into_iter().map(|x| Token::Uint(x.into())).collect();
+            assert_eq!(weights_token.clone(), expected_weights);
+
+            let expected_threshold = Token::Uint(threshold.into());
+            assert_eq!(threshold_token.clone(), expected_threshold);
+
+            let expected_signatures: Vec<Token> = signatures.into_iter().map(|x| Token::Bytes(x)).collect();
+            assert_eq!(signatures_token.clone(), expected_signatures);
+        }
+        else {
+            panic!("Failed")
+        }
     }
 }
