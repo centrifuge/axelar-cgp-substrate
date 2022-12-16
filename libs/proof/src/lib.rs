@@ -10,6 +10,7 @@ use alloc::boxed::Box;
 use ethabi::ParamType;
 
 use sp_core::H256;
+use sp_io::hashing::keccak_256;
 use sp_std::vec::Vec;
 
 // ----------------------------------------------------------------------------
@@ -65,6 +66,29 @@ fn decode(payload: &[u8]) -> Result<Vec<ethabi::Token>, ethabi::Error> {
         ],
         payload,
     )
+}
+
+// https://github.com/axelarnetwork/axelar-cgp-solidity/blob/main/contracts/auth/AxelarAuthWeighted.sol#L88
+fn validate_signatures(msg_hash: H256, signatures: Vec<Vec<u8>>) -> bool {
+    for s in signatures {
+        let rsv = to_rsv(s).expect("Todo(nuno): handle");
+
+        let recov = sp_io::crypto::secp256k1_ecdsa_recover(&rsv, &msg_hash.into());
+    }
+
+    false
+}
+
+fn to_rsv(signature: Vec<u8>) -> Result<[u8; 65], ()> {
+    let src: [u8; 65] = signature.as_slice().try_into().map_err(|_| ())?;
+
+    // Build the `sig` which is of type [0u8; 65]. sig is passed in RSV format. V should be either 0/1 or 27/28.
+    let mut rsv = [0u8; 65];
+    rsv[0..32].copy_from_slice(&src[..32]);
+    rsv[32..64].copy_from_slice(&src[..64]);
+    rsv[64] = 27;
+
+    Ok(rsv)
 }
 
 // ----------------------------------------------------------------------------
