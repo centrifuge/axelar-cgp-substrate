@@ -10,7 +10,7 @@ use alloc::boxed::Box;
 use ethabi::ethereum_types::H512;
 use ethabi::{Address, ParamType};
 
-use sp_core::{H160, H256, keccak_256};
+use sp_core::{keccak_256, H160, H256};
 use sp_std::vec::Vec;
 
 // ----------------------------------------------------------------------------
@@ -84,14 +84,14 @@ pub fn validate_signatures(
         let rsv = to_rsv(s).expect("Todo(nuno): handle");
 
         let signer = match sp_io::crypto::secp256k1_ecdsa_recover(&rsv, &msg_hash.into()) {
-            Ok(x) => H160::from(H256::from_slice(keccak_256(&x).as_slice())),
+            Ok(pubkey) => H160::from(H256::from_slice(keccak_256(&pubkey).as_slice())),
             Err(_) => return false,
         };
 
         let index = operators
             .iter()
-            .position(|x| x.clone() == Address::from(signer.0))
-            .expect("todo(nuno)");
+            .position(|x| x.0 == signer.0)
+            .expect("todo(nuno): couldn't find signer");
 
         weight += weights[index];
 
@@ -111,8 +111,8 @@ fn to_rsv(signature: Vec<u8>) -> Result<[u8; 65], ()> {
 
     // Build the `sig` which is of type [0u8; 65]. sig is passed in RSV format. V should be either 0/1 or 27/28.
     let mut rsv = [0u8; 65];
-    rsv[0..32].copy_from_slice(&src[..32]);
-    rsv[32..64].copy_from_slice(&src[..64]);
+    rsv[0..32].copy_from_slice(&src[0..32]);
+    rsv[33..64].copy_from_slice(&src[33..64]);
     rsv[64] = 27;
 
     Ok(rsv)
