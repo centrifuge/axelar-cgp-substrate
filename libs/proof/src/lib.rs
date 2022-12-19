@@ -7,12 +7,10 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-// use ethabi::ParamType::Address;
 use ethabi::ethereum_types::H512;
 use ethabi::{Address, ParamType};
 
-use sp_core::H256;
-use sp_io::hashing::keccak_256;
+use sp_core::{H160, H256, keccak_256};
 use sp_std::vec::Vec;
 
 // ----------------------------------------------------------------------------
@@ -85,19 +83,14 @@ pub fn validate_signatures(
     for s in signatures.into_iter() {
         let rsv = to_rsv(s).expect("Todo(nuno): handle");
 
-        let res = sp_io::crypto::secp256k1_ecdsa_recover(&rsv, &msg_hash.into());
-        let signer: [u8; 64] = match res {
-            Ok(signer) => signer,
+        let signer = match sp_io::crypto::secp256k1_ecdsa_recover(&rsv, &msg_hash.into()) {
+            Ok(x) => H160::from(H256::from_slice(keccak_256(&x).as_slice())),
             Err(_) => return false,
         };
 
-        // Hack - On Ethereum there's a ecrecover function that returns an address given a rsv
-        // signature. We need something alike here.
-        let addr: [u8; 20] = signer.as_slice().try_into().expect("Todo(nuno)");
-
         let index = operators
             .iter()
-            .position(|o| o == &Address::from(addr))
+            .position(|x| x.clone() == Address::from(signer.0))
             .expect("todo(nuno)");
 
         weight += weights[index];
