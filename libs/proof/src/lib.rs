@@ -7,7 +7,8 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use ethabi::ParamType::Address;
+// use ethabi::ParamType::Address;
+use ethabi::ethereum_types::H512;
 use ethabi::{Address, ParamType};
 
 use sp_core::H256;
@@ -72,7 +73,7 @@ fn decode(payload: &[u8]) -> Result<Vec<ethabi::Token>, ethabi::Error> {
 // https://github.com/axelarnetwork/axelar-cgp-solidity/blob/main/contracts/auth/AxelarAuthWeighted.sol#L88
 // TODO(nuno): given that `operators`, `signatures`, and maybe `weight` should be sorted, I guess
 // we could zip the three and pair the computation together instead of the current expensive lookups.
-fn validate_signatures(
+pub fn validate_signatures(
     msg_hash: H256,
     signatures: Vec<Vec<u8>>,
     operators: Vec<Address>,
@@ -84,10 +85,19 @@ fn validate_signatures(
     for s in signatures.into_iter() {
         let rsv = to_rsv(s).expect("Todo(nuno): handle");
 
-        let signer: [u8; 64] = sp_io::crypto::secp256k1_ecdsa_recover(&rsv, &msg_hash.into());
+        let res = sp_io::crypto::secp256k1_ecdsa_recover(&rsv, &msg_hash.into());
+        let signer: [u8; 64] = match res {
+            Ok(signer) => signer,
+            Err(_) => return false,
+        };
+
+        // Hack - On Ethereum there's a ecrecover function that returns an address given a rsv
+        // signature. We need something alike here.
+        let addr: [u8; 20] = signer.as_slice().try_into().expect("Todo(nuno)");
+
         let index = operators
             .iter()
-            .position(|o| o == &Address::from(signer))
+            .position(|o| o == &Address::from(addr))
             .expect("todo(nuno)");
 
         weight += weights[index];
@@ -104,7 +114,7 @@ fn validate_signatures(
 }
 
 fn to_rsv(signature: Vec<u8>) -> Result<[u8; 65], ()> {
-    let src: [u8; 65] = signature.as_slice().try_into().map_err(|_| ())?;
+    let src: [u8; 64] = signature.as_slice().try_into().map_err(|_| ())?;
 
     // Build the `sig` which is of type [0u8; 65]. sig is passed in RSV format. V should be either 0/1 or 27/28.
     let mut rsv = [0u8; 65];
@@ -193,5 +203,18 @@ mod tests {
         } else {
             panic!("Failed")
         }
+    }
+
+    #[test]
+    fn test_validate_signatures() {
+        let msg_hash = H256::zero();
+        let signatures = vec![vec![1; 64], vec![2; 64], vec![3; 64]];
+        let operators: Vec<Address> = vec![[1u8; 20].into(), [2u8; 20].into(), [3u8; 20].into()];
+        let weights: Vec<u128> = vec![1, 2, 3];
+        let threshold = 2;
+
+        assert!(validate_signatures(
+            msg_hash, signatures, operators, weights, threshold
+        ));
     }
 }
