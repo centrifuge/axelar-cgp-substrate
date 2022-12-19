@@ -7,7 +7,8 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use ethabi::ParamType;
+use ethabi::ParamType::Address;
+use ethabi::{Address, ParamType};
 
 use sp_core::H256;
 use sp_io::hashing::keccak_256;
@@ -69,13 +70,36 @@ fn decode(payload: &[u8]) -> Result<Vec<ethabi::Token>, ethabi::Error> {
 }
 
 // https://github.com/axelarnetwork/axelar-cgp-solidity/blob/main/contracts/auth/AxelarAuthWeighted.sol#L88
-fn validate_signatures(msg_hash: H256, signatures: Vec<Vec<u8>>) -> bool {
-    for s in signatures {
+// TODO(nuno): given that `operators`, `signatures`, and maybe `weight` should be sorted, I guess
+// we could zip the three and pair the computation together instead of the current expensive lookups.
+fn validate_signatures(
+    msg_hash: H256,
+    signatures: Vec<Vec<u8>>,
+    operators: Vec<Address>,
+    weights: Vec<u128>,
+    threshold: u128,
+) -> bool {
+    let mut weight = 0;
+
+    for s in signatures.into_iter() {
         let rsv = to_rsv(s).expect("Todo(nuno): handle");
 
-        let recov = sp_io::crypto::secp256k1_ecdsa_recover(&rsv, &msg_hash.into());
+        let signer: [u8; 64] = sp_io::crypto::secp256k1_ecdsa_recover(&rsv, &msg_hash.into());
+        let index = operators
+            .iter()
+            .position(|o| o == &Address::from(signer))
+            .expect("todo(nuno)");
+
+        weight += weights[index];
+
+        if weight >= threshold {
+            return true;
+        }
     }
 
+    // In Solidity:
+    // if weight sum below threshold
+    // revert LowSignaturesWeight();
     false
 }
 
