@@ -267,8 +267,20 @@ fn decode_input(input: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ethabi::Error> {
 }
 
 fn to_eth_signed_message_hash(hash: Bytes32) -> Bytes32 {
-    keccak_256(&*ethabi::encode(&[
-        Token::String("\x19Ethereum Signed Message:\n32".into()),
-        Token::FixedBytes(hash.to_vec()),
-    ]))
+    use eth_encode_packed::{abi::encode_packed, SolidityDataType};
+
+    keccak_256(
+        &encode_packed(&[
+            SolidityDataType::String("\x19Ethereum Signed Message:\n32"),
+            SolidityDataType::Bytes(&hash.clone()),
+        ])
+        .0,
+    )
+
+    // Solidity implementation:
+    // function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
+    //         // 32 is the length in bytes of hash,
+    //         // enforced by the type signature above
+    //         return keccak256(abi.encodePacked('\x19Ethereum Signed Message:\n32', hash));
+    //     }
 }
