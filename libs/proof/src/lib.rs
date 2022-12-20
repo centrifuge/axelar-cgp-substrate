@@ -233,11 +233,10 @@ fn decode_input(input: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ethabi::Error> {
     );
 
     match res {
-        Ok(params) =>
-            match params.as_slice() {
-                [Token::Bytes(data), Token::Bytes(proof)] => Ok((data.clone(), proof.clone())),
-                _ =>  panic!("todo(nuno): wrong input"),
-            }
+        Ok(params) => match params.as_slice() {
+            [Token::Bytes(data), Token::Bytes(proof)] => Ok((data.clone(), proof.clone())),
+            _ => panic!("todo(nuno): wrong input"),
+        },
         _ => panic!("todo(nuno): failed to decode input"),
     }
 }
