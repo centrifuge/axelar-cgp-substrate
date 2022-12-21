@@ -241,9 +241,8 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
-        pub fn validate_proof(msg_hash: H256, raw_proof: &[u8]) -> Result<(), DispatchError> {
+        pub fn validate_proof(msg_hash: H256, raw_proof: &[u8]) -> Result<bool, DispatchError> {
             let proof = proof::decode(raw_proof).map_err(|_| Error::<T>::FailedToDecodeProof)?;
-
             let operators_hash = operators_hash(
                 proof.operators.clone(),
                 proof.weights.clone(),
@@ -257,13 +256,17 @@ pub mod pallet {
                 Error::<T>::InvalidOperators
             );
 
-            proof::validate_signatures(msg_hash, proof).map_err(|_| Error::<T>::InvalidProof.into())
+            proof::validate_signatures(msg_hash, proof).map_err(|_| Error::<T>::InvalidProof)?;
+
+            Ok(operators_epoch == current_epoch)
         }
 
+        /// Check if the operators are allowed to execute.
+        /// Execution is allowed if
+        ///   - The `operators_epoch` is not 0
+        ///   - The `operators_epoch` is not expired, i.e., it's within the OLD_KEY_RETENTION period.
         fn valid_operators(operators_epoch: u64, current_epoch: u64) -> bool {
-            operators_epoch != 0
-                && current_epoch - operators_epoch < OLD_KEY_RETENTION
-                && operators_epoch == current_epoch
+            operators_epoch != 0 && current_epoch - operators_epoch < OLD_KEY_RETENTION
         }
     }
 }
