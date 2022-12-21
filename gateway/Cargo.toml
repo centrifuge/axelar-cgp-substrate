@@ -16,8 +16,11 @@ scale-info = { version = "2.1.2", default-features = false, features = [
 ] }
 serde = { version = "1.0.136", optional = true }
 ethabi = { version = "16.0", default-features = false }
-eth-encode-packed = "0.1.0"
 
+# Local
+ecdsa-utils = { path = "../libs/ecdsa" }
+
+# Substrate
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.33" }
 frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.33" }
 sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.33" }

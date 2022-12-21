@@ -63,19 +63,20 @@ impl TryFrom<Vec<Token>> for Proof {
 
     fn try_from(tokens: Vec<Token>) -> Result<Self, Self::Error> {
         if let [Token::Array(operators_token), Token::Array(weights_token), Token::Uint(t), Token::Array(signatures_token)] =
-        tokens.as_slice() {
+            tokens.as_slice()
+        {
             let operators = operators_token
                 .into_iter()
                 .flat_map(|x| match x {
                     Token::Address(x) => Ok(x.clone()),
-                    _ =>  Err(ethabi::Error::InvalidData),
+                    _ => Err(ethabi::Error::InvalidData),
                 })
                 .collect();
             let weights = weights_token
                 .into_iter()
                 .flat_map(|x| match x {
                     Token::Uint(w) => Ok(w.as_u128()),
-                    _ =>  Err(ethabi::Error::InvalidData),
+                    _ => Err(ethabi::Error::InvalidData),
                 })
                 .collect();
             let threshold = t.as_u128();
@@ -83,7 +84,7 @@ impl TryFrom<Vec<Token>> for Proof {
                 .into_iter()
                 .flat_map(|x| match x {
                     Token::Bytes(x) => Ok(x.clone()),
-                    _ =>  Err(ethabi::Error::InvalidData),
+                    _ => Err(ethabi::Error::InvalidData),
                 })
                 .collect();
 
@@ -91,7 +92,7 @@ impl TryFrom<Vec<Token>> for Proof {
                 operators,
                 weights,
                 threshold,
-                signatures
+                signatures,
             });
         }
 
@@ -219,7 +220,7 @@ mod tests {
             operators: operators.into_iter().map(|x| Address::from(x)).collect(),
             weights,
             threshold,
-            signatures
+            signatures,
         };
 
         assert_eq!(proof, expected_proof);
@@ -231,10 +232,15 @@ mod tests {
         let (msg, raw_proof) = decode_input(&input).expect("Input should decode");
         let proof = decode(&raw_proof).expect("Proof should decode");
 
-        let msg_hash =
-            H256::from_slice(&to_eth_signed_message_hash(keccak_256(msg.as_slice())));
+        let msg_hash = H256::from_slice(&to_eth_signed_message_hash(keccak_256(msg.as_slice())));
 
-        validate_signatures(msg_hash, proof.signatures, proof.operators, proof.weights, proof.threshold);
+        validate_signatures(
+            msg_hash,
+            proof.signatures,
+            proof.operators,
+            proof.weights,
+            proof.threshold,
+        );
     }
 
     #[test]
