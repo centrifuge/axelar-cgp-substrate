@@ -182,7 +182,10 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             let _ = ensure_signed(origin)?;
             // PLACEHOLDER: Verify command batch proof
-            pallet_utility::Pallet::<T>::force_batch(RawOrigin::Signed(Self::account_id()).into(), calls)
+            pallet_utility::Pallet::<T>::force_batch(
+                RawOrigin::Signed(Self::account_id()).into(),
+                calls,
+            )
         }
 
         #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship(new_operators.len() as u32))]

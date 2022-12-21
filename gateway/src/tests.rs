@@ -1,9 +1,9 @@
 use super::*;
 use frame_support::{assert_noop, assert_ok};
 use mock::*;
-use sp_core::{keccak_256, H256};
 use pallet::Call as AxelarGatewayCall;
 use pallet_utility::Event as UtilityEvent;
+use sp_core::{keccak_256, H256};
 use sp_runtime::traits::BadOrigin;
 
 #[test]
