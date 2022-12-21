@@ -118,6 +118,7 @@ pub fn validate_signatures(
 pub mod ecdsa {
 	use sp_core::{keccak_256, H160, H256};
 	use crate::proof::SignatureError;
+	use eth_encode_packed::{abi::encode_packed, SolidityDataType};
 
 	/// Returns the address that signed a hashed message (`hash`) with
 	/// `signature`. This address can then be used for verification purposes.
@@ -132,5 +133,17 @@ pub mod ecdsa {
 			Ok(pubkey) => Ok(H160::from(H256::from_slice(keccak_256(&pubkey).as_slice()))),
 			Err(_) => Err(SignatureError::InvalidSignature),
 		}
+	}
+
+	/// Returns an Ethereum Signed Message, created from a `hash`. This replicates the behaviour of
+	/// the https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign JSON-RPC method.
+	#[allow(dead_code)]
+	fn to_eth_signed_message_hash(hash: [u8; 32]) -> [u8; 32] {
+		let (data, _) = encode_packed(&[
+			SolidityDataType::String("\x19Ethereum Signed Message:\n32"),
+			SolidityDataType::Bytes(&hash.clone()),
+		]);
+
+		keccak_256(&data)
 	}
 }
