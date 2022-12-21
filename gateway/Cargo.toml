@@ -19,7 +19,7 @@ serde = { version = "1.0.136", optional = true }
 ethabi = { version = "16.0", default-features = false }
 
 # Local
-ecdsa-utils = { path = "../libs/ecdsa" }
+ecdsa = { path = "../libs/ecdsa" }
 
 # Substrate
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.33" }

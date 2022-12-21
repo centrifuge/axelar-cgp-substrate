@@ -86,11 +86,9 @@ pub enum SignatureError {
     LowSignaturesWeight,
 }
 
-type Success = ();
-
-/// Verifies that the proof holds enough signatures past the threshold.
+/// Verifies that the proof holds enough signatures to meet the required threshold.
 /// Fails if not enough operators signed the `msg_hash` to meet the threshold.
-pub fn validate_signatures(msg_hash: H256, proof: Proof) -> Result<Success, SignatureError> {
+pub fn validate_signatures(msg_hash: H256, proof: Proof) -> Result<(), SignatureError> {
     let Proof {
         operators,
         weights,
@@ -100,7 +98,7 @@ pub fn validate_signatures(msg_hash: H256, proof: Proof) -> Result<Success, Sign
     let mut weight = 0;
 
     for signature in signatures.into_iter() {
-        let signer = ecdsa_utils::recover(msg_hash, signature)
+        let signer = ecdsa::recover(msg_hash, signature)
             .map_err(|_| SignatureError::InvalidSignature)?;
 
         let index = operators
@@ -124,31 +122,10 @@ pub fn validate_signatures(msg_hash: H256, proof: Proof) -> Result<Success, Sign
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ecdsa_utils::to_eth_signed_message_hash;
+    use ecdsa::to_eth_signed_message_hash;
     use ethabi::Token;
     use sp_core::keccak_256;
     use sp_std::vec;
-
-    fn encode(
-        operators: Vec<[u8; 20]>,
-        weights: Vec<u128>,
-        threshold: u128,
-        signatures: Vec<Vec<u8>>,
-    ) -> ethabi::Bytes {
-        let operators_token = operators
-            .into_iter()
-            .map(|x| Token::Address(x.into()))
-            .collect();
-        let weights_token = weights.into_iter().map(|x| Token::Uint(x.into())).collect();
-        let signatures_token = signatures.into_iter().map(|x| Token::Bytes(x)).collect();
-
-        ethabi::encode(&[
-            Token::Array(operators_token),
-            Token::Array(weights_token),
-            Token::Uint(threshold.into()),
-            Token::Array(signatures_token),
-        ])
-    }
 
     #[test]
     fn proof_encode_decode() {
@@ -187,6 +164,28 @@ mod tests {
         let msg_hash = H256::from_slice(&to_eth_signed_message_hash(keccak_256(msg.as_slice())));
 
         assert!(validate_signatures(msg_hash, proof,).is_ok());
+    }
+
+    /// Test utils function that encodes the data of a proof to ethabi::Bytes
+    fn encode(
+        operators: Vec<[u8; 20]>,
+        weights: Vec<u128>,
+        threshold: u128,
+        signatures: Vec<Vec<u8>>,
+    ) -> ethabi::Bytes {
+        let operators_token = operators
+            .into_iter()
+            .map(|x| Token::Address(x.into()))
+            .collect();
+        let weights_token = weights.into_iter().map(|x| Token::Uint(x.into())).collect();
+        let signatures_token = signatures.into_iter().map(|x| Token::Bytes(x)).collect();
+
+        ethabi::encode(&[
+            Token::Array(operators_token),
+            Token::Array(weights_token),
+            Token::Uint(threshold.into()),
+            Token::Array(signatures_token),
+        ])
     }
 
     /// Test utils function to decode the input of a `execute` message, expected to contain a

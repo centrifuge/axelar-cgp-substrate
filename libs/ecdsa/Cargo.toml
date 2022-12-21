@@ -1,6 +1,6 @@
 [package]
-name = "ecdsa-utils"
-description = "ECDSA Utils"
+name = "ecdsa"
+description = "ECDSA functions"
 repository = "https://github.com/centrifuge/axelar-cgp-substrate"
 license = "GPL-3.0-only"
 version = "0.0.1-dev"
