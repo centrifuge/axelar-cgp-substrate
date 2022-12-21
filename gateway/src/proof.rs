@@ -5,7 +5,7 @@
 // Ensure we're `no_std` when compiling for WebAssembly.
 #![cfg_attr(not(feature = "std"), no_std)]
 use ethabi::{Address, ParamType, Token};
-use sp_core::{keccak_256, H256};
+use sp_core::H256;
 
 #[derive(PartialEq, Debug)]
 pub struct Proof {
@@ -135,7 +135,7 @@ pub fn validate_signatures(msg_hash: H256, proof: Proof) -> Result<(), Signature
 // Tests
 // ----------------------------------------------------------------------------
 #[cfg(test)]
-mod tests {
+pub mod proof_tests {
     use super::*;
     use ecdsa::to_eth_signed_message_hash;
     use ethabi::Token;
@@ -205,7 +205,7 @@ mod tests {
 
     /// Test utils function to decode the input of a `execute` message, expected to contain a
     /// bytearray with the data of the call to be executed and a bytearray containing the proof.
-    fn decode_input(input: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ethabi::Error> {
+    pub fn decode_input(input: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ethabi::Error> {
         let res = ethabi::decode(
             &[
                 // data
