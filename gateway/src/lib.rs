@@ -23,9 +23,12 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod proof;
+
 // ----------------------------------------------------------------------------
-// Type aliases
+// Constants
 // ----------------------------------------------------------------------------
+pub const OLD_KEY_RETENTION: u64 = 16;
 
 // ----------------------------------------------------------------------------
 // Pallet module
@@ -38,6 +41,7 @@ mod tests;
 // pallet itself.
 #[frame_support::pallet]
 pub mod pallet {
+    use crate::proof::operators_hash;
     use ethabi::Token;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
@@ -98,13 +102,27 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn hash_for_epoch)]
-    pub(super) type HashForEpoch<T: Config> =
-        StorageMap<_, Blake2_128Concat, u64, H256, ValueQuery>;
+    pub(super) type HashForEpoch<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        // Epoch
+        u64,
+        // Operators Hash
+        H256,
+        ValueQuery,
+    >;
 
     #[pallet::storage]
     #[pallet::getter(fn epoch_for_hash)]
-    pub(super) type EpochForHash<T: Config> =
-        StorageMap<_, Blake2_128Concat, H256, u64, ValueQuery>;
+    pub(super) type EpochForHash<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        // Operators Hash
+        H256,
+        // Epoch
+        u64,
+        ValueQuery,
+    >;
 
     // ------------------------------------------------------------------------
     // Pallet errors
@@ -116,6 +134,11 @@ pub mod pallet {
         InvalidWeights,
         InvalidThreshold,
         DuplicateOperators,
+
+        /// Failed to decode the proof
+        FailedToDecodeProof,
+        /// Proof validation failed
+        InvalidProof,
     }
 
     // ------------------------------------------------------------------------
@@ -216,4 +239,35 @@ pub mod pallet {
             accounts[0] != [0; 20]
         }
     }
-} // end of 'pallet' module
+
+    impl<T: Config> Pallet<T> {
+        pub fn validate_proof(msg_hash: H256, raw_proof: &[u8]) -> Result<bool, DispatchError> {
+            let proof = proof::decode(raw_proof).map_err(|_| Error::<T>::FailedToDecodeProof)?;
+            let operators_hash = operators_hash(
+                proof.operators.clone(),
+                proof.weights.clone(),
+                proof.threshold,
+            );
+            let operators_epoch = <EpochForHash<T>>::get(operators_hash);
+            let current_epoch = <CurrentEpoch<T>>::get();
+
+            ensure!(
+                Self::valid_operators(operators_epoch, current_epoch),
+                Error::<T>::InvalidOperators
+            );
+
+            proof::validate_signatures(msg_hash, proof).map_err(|_| Error::<T>::InvalidProof)?;
+
+            Ok(operators_epoch == current_epoch)
+        }
+
+        /// Check if the operators are allowed to execute.
+        /// Execution is allowed if
+        ///   - The `operators_epoch` is not 0
+        ///   - The `operators_epoch` is not expired, i.e., it's within the OLD_KEY_RETENTION period.
+        fn valid_operators(operators_epoch: u64, current_epoch: u64) -> bool {
+            operators_epoch != 0 && current_epoch - operators_epoch < OLD_KEY_RETENTION
+        }
+    }
+}
+// end of 'pallet' module
