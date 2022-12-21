@@ -5,7 +5,7 @@
 // Ensure we're `no_std` when compiling for WebAssembly.
 #![cfg_attr(not(feature = "std"), no_std)]
 use ethabi::{Address, ParamType, Token};
-use sp_core::H256;
+use sp_core::{keccak_256, H256};
 
 #[derive(PartialEq, Debug)]
 pub struct Proof {
@@ -65,11 +65,11 @@ pub fn operators_hash(operators: Vec<Address>, weights: Vec<u128>, threshold: u1
         .collect();
     let weights_token = weights.into_iter().map(|x| Token::Uint(x.into())).collect();
 
-    H256::from_slice(&ethabi::encode(&[
+    H256::from(keccak_256(&ethabi::encode(&[
         Token::Array(operators_token),
         Token::Array(weights_token),
         Token::Uint(threshold.into()),
-    ]))
+    ])))
 }
 
 /// Decode a payload expected to contain a `Proof`.

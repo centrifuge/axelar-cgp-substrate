@@ -121,7 +121,7 @@ fn validate_proof() {
         let (msg, raw_proof) = proof::proof_tests::decode_input(&input).expect("Input should decode");
         let msg_hash = H256::from_slice(&ecdsa::to_eth_signed_message_hash(keccak_256(msg.as_slice())));
 
-        //TODO(nuno): Set state and debug current error
+        // //TODO(nuno): Set state and debug current error
         assert!(AxelarGateway::validate_proof(msg_hash, &raw_proof).is_ok());
     });
 }
