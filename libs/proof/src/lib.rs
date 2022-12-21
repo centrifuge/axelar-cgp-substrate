@@ -58,6 +58,47 @@ struct Proof {
     pub signatures: Vec<Vec<u8>>,
 }
 
+impl TryFrom<Vec<Token>> for Proof {
+    type Error = ethabi::Error;
+
+    fn try_from(tokens: Vec<Token>) -> Result<Self, Self::Error> {
+        if let [Token::Array(operators_token), Token::Array(weights_token), Token::Uint(t), Token::Array(signatures_token)] =
+        tokens.as_slice() {
+            let operators = operators_token
+                .into_iter()
+                .flat_map(|x| match x {
+                    Token::Address(x) => Ok(x.clone()),
+                    _ =>  Err(ethabi::Error::InvalidData),
+                })
+                .collect();
+            let weights = weights_token
+                .into_iter()
+                .flat_map(|x| match x {
+                    Token::Uint(w) => Ok(w.as_u128()),
+                    _ =>  Err(ethabi::Error::InvalidData),
+                })
+                .collect();
+            let threshold = t.as_u128();
+            let signatures = signatures_token
+                .into_iter()
+                .flat_map(|x| match x {
+                    Token::Bytes(x) => Ok(x.clone()),
+                    _ =>  Err(ethabi::Error::InvalidData),
+                })
+                .collect();
+
+            return Ok(Proof {
+                operators,
+                weights,
+                threshold,
+                signatures
+            });
+        }
+
+        Err(ethabi::Error::InvalidData)
+    }
+}
+
 // Decode a payload containing a proof into the Proof type
 fn decode(payload: &[u8]) -> Result<Proof, ethabi::Error> {
     let decoded = ethabi::decode(
@@ -74,49 +115,7 @@ fn decode(payload: &[u8]) -> Result<Proof, ethabi::Error> {
         payload,
     )?;
 
-    if let [Token::Array(operators_token), Token::Array(weights_token), Token::Uint(t), Token::Array(signatures_token)] =
-    decoded.as_slice() {
-        let operators = operators_token
-            .into_iter()
-            .map(|x| {
-                if let Token::Address(a) = x {
-                    a.clone()
-                } else {
-                    panic!("nuno operators")
-                }
-            })
-            .collect();
-        let signatures = signatures_token
-            .into_iter()
-            .map(|x| {
-                if let Token::Bytes(s) = x {
-                    s.clone()
-                } else {
-                    panic!("nuno signatures")
-                }
-            })
-            .collect();
-        let weights = weights_token
-            .into_iter()
-            .map(|x| {
-                if let &Token::Uint(w) = x {
-                    w.as_u128()
-                } else {
-                    panic!("nuno weights")
-                }
-            })
-            .collect();
-        let threshold = t.as_u128();
-
-        return Ok(Proof {
-            operators,
-            weights,
-            threshold,
-            signatures
-        });
-    }
-
-    Err(ethabi::Error::InvalidData)
+    Proof::try_from(decoded)
 }
 
 // https://github.com/axelarnetwork/axelar-cgp-solidity/blob/main/contracts/auth/AxelarAuthWeighted.sol#L88
