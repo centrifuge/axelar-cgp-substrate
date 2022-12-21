@@ -241,7 +241,7 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
-        pub fn validate_proof(msg_hash: H256, raw_proof: &[u8]) -> Result<(), Error<T>> {
+        pub fn validate_proof(msg_hash: H256, raw_proof: &[u8]) -> Result<(), DispatchError> {
             let proof = proof::decode(raw_proof).map_err(|_| Error::<T>::FailedToDecodeProof)?;
 
             let operators_hash = operators_hash(
@@ -257,7 +257,7 @@ pub mod pallet {
                 Error::<T>::InvalidOperators
             );
 
-            proof::validate_signatures(msg_hash, proof).map_err(|_| Error::<T>::InvalidProof)
+            proof::validate_signatures(msg_hash, proof).map_err(|_| Error::<T>::InvalidProof.into())
         }
 
         fn valid_operators(operators_epoch: u64, current_epoch: u64) -> bool {
