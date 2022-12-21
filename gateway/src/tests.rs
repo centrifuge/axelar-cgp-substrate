@@ -208,8 +208,7 @@ fn simple_execute_batch() {
             0u64,
             vec![inner_call]
         ),);
-        event_exists(UtilityEvent::BatchInterrupted {
-            index: 0,
+        event_exists(UtilityEvent::ItemFailed {
             error: Error::<Runtime>::InvalidOperators.into(),
         });
     });

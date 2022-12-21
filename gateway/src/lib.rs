@@ -155,14 +155,14 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        // Weight definition taken from Substrate Utility.batch, not sure if there is a more succinct and maintainable
+        // Weight definition taken from Substrate Utility.force_batch, not sure if there is a more succinct and maintainable
         // way to ensure the call is properly weighted
         #[pallet::weight({
             let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
             let dispatch_weight = dispatch_infos.iter()
                 .map(|di| di.weight)
                 .fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
-                .saturating_add(<pallet_utility::weights::SubstrateWeight<T> as UtilityWeightInfo>::batch(calls.len() as u32));
+                .saturating_add(<pallet_utility::weights::SubstrateWeight<T> as UtilityWeightInfo>::force_batch(calls.len() as u32));
             let dispatch_class = {
                 let all_operational = dispatch_infos.iter()
                     .map(|di| di.class)
@@ -182,7 +182,7 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             let _ = ensure_signed(origin)?;
             // PLACEHOLDER: Verify command batch proof
-            pallet_utility::Pallet::<T>::batch(RawOrigin::Signed(Self::account_id()).into(), calls)
+            pallet_utility::Pallet::<T>::force_batch(RawOrigin::Signed(Self::account_id()).into(), calls)
         }
 
         #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship(new_operators.len() as u32))]
@@ -281,9 +281,7 @@ pub mod pallet {
 
             accounts[0] != [0; 20]
         }
-    }
 
-    impl<T: Config> Pallet<T> {
         pub fn validate_proof(msg_hash: H256, raw_proof: &[u8]) -> Result<bool, DispatchError> {
             let proof = proof::decode(raw_proof).map_err(|_| Error::<T>::FailedToDecodeProof)?;
             let operators_hash = operators_hash(
