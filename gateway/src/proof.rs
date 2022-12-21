@@ -59,7 +59,7 @@ impl TryFrom<Vec<Token>> for Proof {
 
 /// Decode a payload expected to contain a `Proof`.
 #[allow(dead_code)]
-fn decode(payload: &[u8]) -> Result<Proof, ethabi::Error> {
+pub fn decode(payload: &[u8]) -> Result<Proof, ethabi::Error> {
     ethabi::decode(
         &[
             // operator's addresses
@@ -98,8 +98,8 @@ pub fn validate_signatures(msg_hash: H256, proof: Proof) -> Result<(), Signature
     let mut weight = 0;
 
     for signature in signatures.into_iter() {
-        let signer = ecdsa::recover(msg_hash, signature)
-            .map_err(|_| SignatureError::InvalidSignature)?;
+        let signer =
+            ecdsa::recover(msg_hash, signature).map_err(|_| SignatureError::InvalidSignature)?;
 
         let index = operators
             .iter()
