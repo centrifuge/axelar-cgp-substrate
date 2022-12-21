@@ -18,7 +18,7 @@ pub fn recover(hash: H256, signature: Vec<u8>) -> Result<H160, EcdsaVerifyError>
 /// Returns an Ethereum Signed Message, created from a `hash`. This replicates the behaviour of
 /// the https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign JSON-RPC method.
 #[allow(dead_code)]
-fn to_eth_signed_message_hash(hash: [u8; 32]) -> [u8; 32] {
+pub fn to_eth_signed_message_hash(hash: [u8; 32]) -> [u8; 32] {
     let (data, _) = encode_packed(&[
         SolidityDataType::String("\x19Ethereum Signed Message:\n32"),
         SolidityDataType::Bytes(&hash.clone()),

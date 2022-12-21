@@ -11,6 +11,7 @@ edition = "2021"
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
   "max-encoded-len",
 ] }
+hex = "0.4.3"
 scale-info = { version = "2.1.2", default-features = false, features = [
   "derive",
 ] }
