@@ -41,11 +41,11 @@ pub const OLD_KEY_RETENTION: u64 = 16;
 // pallet itself.
 #[frame_support::pallet]
 pub mod pallet {
-    use crate::proof::Proof;
+    use crate::proof::operators_hash;
     use ethabi::Token;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
-    use sp_core::{keccak_256, H256};
+    use sp_core::H256;
     use sp_runtime::ArithmeticError;
 
     use super::*;
@@ -242,15 +242,18 @@ pub mod pallet {
 
     impl<T: Config> Pallet<T> {
         pub fn validate_proof(msg_hash: H256, raw_proof: &[u8]) -> Result<(), Error<T>> {
-            let proof = proof::decode(raw_proof).map_err(|| Error::<T>::FailedToDecodeProof)?;
+            let proof = proof::decode(raw_proof).map_err(|_| Error::<T>::FailedToDecodeProof)?;
 
-            let operators_hash =
-                H256::from(keccak_256(ethabi::encode(operators, weights, threshold)));
+            let operators_hash = operators_hash(
+                proof.operators.clone(),
+                proof.weights.clone(),
+                proof.threshold,
+            );
             let operators_epoch = <EpochForHash<T>>::get(operators_hash);
             let current_epoch = <CurrentEpoch<T>>::get();
 
             ensure!(
-                valid_operators(operators_epoch, current_epoch),
+                Self::valid_operators(operators_epoch, current_epoch),
                 Error::<T>::InvalidOperators
             );
 
