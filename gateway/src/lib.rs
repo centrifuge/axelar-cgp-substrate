@@ -247,7 +247,12 @@ pub mod pallet {
                 Error::<T>::CommandIdsLengthMismatch
             );
 
-            let payload = Self::abi_encode_batch_params(chain_id.clone(), command_ids.clone(), commands.clone(), calls.clone());
+            let payload = Self::abi_encode_batch_params(
+                chain_id.clone(),
+                command_ids.clone(),
+                commands.clone(),
+                calls.clone(),
+            );
             let mut is_active_operators =
                 Self::validate_proof(H256::from(sp_core::keccak_256(&payload)), &proof)?;
 
@@ -275,7 +280,8 @@ pub mod pallet {
                     is_active_operators = false;
                 // TODO: Do we need the approve flow or trigger final execution instead
                 // else if { Some(Call::approve_contract_call { .. }) = call.is_sub_type() }
-                } else { // Do not execute if call not allowed, just skip
+                } else {
+                    // Do not execute if call not allowed, just skip
                     continue;
                 }
 
@@ -289,7 +295,10 @@ pub mod pallet {
                 if let Err(e) = result {
                     has_error = true;
                     <CommandExecuted<T>>::set(command_ids[idx], false);
-                    Self::deposit_event(Event::ItemFailed { index: idx as u32, error: e.error });
+                    Self::deposit_event(Event::ItemFailed {
+                        index: idx as u32,
+                        error: e.error,
+                    });
                 } else {
                     Self::deposit_event(Event::ItemCompleted);
                 }
@@ -442,11 +451,25 @@ pub mod pallet {
             operators_epoch != 0 && current_epoch - operators_epoch < OLD_KEY_RETENTION
         }
 
-        pub fn abi_encode_batch_params(chain_id: u32, command_ids: Vec<H256>, commands: Vec<String>, calls: Vec<<T as Config>::RuntimeCall>) -> ethabi::Bytes {
+        pub fn abi_encode_batch_params(
+            chain_id: u32,
+            command_ids: Vec<H256>,
+            commands: Vec<String>,
+            calls: Vec<<T as Config>::RuntimeCall>,
+        ) -> ethabi::Bytes {
             // TODO: verify calling encode() on H256 doesnt double encode
-            let command_ids_token: Vec<Token> = command_ids.into_iter().map(|x| { Token::FixedBytes(x.encode()) }).collect();
-            let commands_token: Vec<Token> = commands.into_iter().map(|x| { Token::String(x.into()) } ).collect();
-            let calls_token: Vec<Token> = calls.into_iter().map(|x| { Token::Bytes(x.encode().into()) }).collect();
+            let command_ids_token: Vec<Token> = command_ids
+                .into_iter()
+                .map(|x| Token::FixedBytes(x.encode()))
+                .collect();
+            let commands_token: Vec<Token> = commands
+                .into_iter()
+                .map(|x| Token::String(x.into()))
+                .collect();
+            let calls_token: Vec<Token> = calls
+                .into_iter()
+                .map(|x| Token::Bytes(x.encode().into()))
+                .collect();
 
             ethabi::encode(&[
                 Token::Uint(ethabi::Uint::from(chain_id)),

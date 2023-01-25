@@ -1,10 +1,10 @@
 use super::*;
+use ethabi::{ParamType, Token};
 use frame_support::{assert_noop, assert_ok};
 use mock::*;
 use pallet::Call as AxelarGatewayCall;
-use sp_core::{H160, keccak_256, H256};
+use sp_core::{keccak_256, H160, H256};
 use sp_runtime::traits::BadOrigin;
-use ethabi::{ParamType, Token};
 
 #[test]
 fn accounts_ordered() {
@@ -257,10 +257,18 @@ fn execute_simple_batch_invalid_operators() {
         });
 
         let chain_id = 36_u32;
-        let command_id = H256::from_slice(&hex::decode("eeccf7fbb3e9555e6b6111e1ccf0382b0ffa7c66cde0d69d1bdb1b80b6fc2ee3").expect(""));
+        let command_id = H256::from_slice(
+            &hex::decode("eeccf7fbb3e9555e6b6111e1ccf0382b0ffa7c66cde0d69d1bdb1b80b6fc2ee3")
+                .expect(""),
+        );
         let command_x: String = String::from("approveContractCall");
 
-        let batch_msg: ethabi::Bytes = AxelarGateway::abi_encode_batch_params(chain_id, vec![command_id.clone()], vec![command_x.clone()], vec![inner_call.clone()]);
+        let batch_msg: ethabi::Bytes = AxelarGateway::abi_encode_batch_params(
+            chain_id,
+            vec![command_id.clone()],
+            vec![command_x.clone()],
+            vec![inner_call.clone()],
+        );
         let sign_msg = ecdsa::to_eth_signed_message_hash(keccak_256(batch_msg.as_slice()));
 
         let operator_0 = ecdsa::generate_keypair();
@@ -269,7 +277,16 @@ fn execute_simple_batch_invalid_operators() {
         let operator_1_public = H160::from(H256::from_slice(keccak_256(&operator_1.0).as_slice()));
         let sig_0 = ecdsa::sign_message(H256::from_slice(&sign_msg), &operator_0.1);
         let sig_1 = ecdsa::sign_message(H256::from_slice(&sign_msg), &operator_1.1);
-        let proof_bytes = proof::proof_tests::encode(vec![operator_0_public.to_fixed_bytes(), operator_1_public.to_fixed_bytes()], vec![50, 50], 50u128, vec![sig_0, sig_1]).to_vec();
+        let proof_bytes = proof::proof_tests::encode(
+            vec![
+                operator_0_public.to_fixed_bytes(),
+                operator_1_public.to_fixed_bytes(),
+            ],
+            vec![50, 50],
+            50u128,
+            vec![sig_0, sig_1],
+        )
+        .to_vec();
 
         assert_noop!(
             AxelarGateway::execute(

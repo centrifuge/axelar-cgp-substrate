@@ -1,7 +1,9 @@
 use eth_encode_packed::{abi::encode_packed, SolidityDataType};
+use libsecp256k1::{
+    recover as recover2, sign, Message, PublicKey, RecoveryId, SecretKey, Signature,
+};
 use sp_core::{keccak_256, H160, H256};
 use sp_io::EcdsaVerifyError;
-use libsecp256k1::{sign, recover as recover2, Message, SecretKey, PublicKey, Signature, RecoveryId};
 
 /// Returns the address that signed a hashed message (`hash`) with
 /// `signature`. This address can then be used for verification purposes.
@@ -17,8 +19,14 @@ pub fn recover(hash: H256, signature: Vec<u8>) -> Result<H160, EcdsaVerifyError>
 }
 
 pub fn recover_2(msg: H256, sig: [u8; 64], rec_id: u8) -> Result<H160, EcdsaVerifyError> {
-    let pubkey = recover2(&Message::parse(msg.as_fixed_bytes()), &Signature::parse_standard(&sig).unwrap(), &RecoveryId::parse(rec_id).unwrap());
-    Ok(H160::from(H256::from_slice(keccak_256(pubkey.unwrap().serialize().as_slice()).as_slice())))
+    let pubkey = recover2(
+        &Message::parse(msg.as_fixed_bytes()),
+        &Signature::parse_standard(&sig).unwrap(),
+        &RecoveryId::parse(rec_id).unwrap(),
+    );
+    Ok(H160::from(H256::from_slice(
+        keccak_256(pubkey.unwrap().serialize().as_slice()).as_slice(),
+    )))
 }
 
 /// Returns Signature (r,s,v) concatenated

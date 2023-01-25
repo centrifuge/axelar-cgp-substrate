@@ -139,7 +139,7 @@ pub mod proof_tests {
     use super::*;
     use ecdsa::to_eth_signed_message_hash;
     use ethabi::Token;
-    use sp_core::{H160, keccak_256};
+    use sp_core::{keccak_256, H160};
     use sp_std::vec;
 
     #[test]
@@ -190,8 +190,12 @@ pub mod proof_tests {
         let sig = ecdsa::sign_message(msg_hash, &secret);
         assert_eq!(sig.len(), 65);
         match ecdsa::recover(msg_hash, sig).ok() {
-            None => { panic!("should not happen") }
-            Some(signer) => { assert_eq!(pk_hash.0, signer.0) }
+            None => {
+                panic!("should not happen")
+            }
+            Some(signer) => {
+                assert_eq!(pk_hash.0, signer.0)
+            }
         }
     }
 
