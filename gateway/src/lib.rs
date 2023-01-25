@@ -14,9 +14,11 @@ pub mod traits;
 
 // Re-export pallet components in crate namespace (for runtime construction)
 use crate::traits::WeightInfo;
-use frame_support::dispatch::RawOrigin;
+use frame_support::dispatch::{
+    extract_actual_weight, GetDispatchInfo, PostDispatchInfo, RawOrigin,
+};
 use frame_support::traits::EnsureOrigin;
-use frame_support::{transactional, PalletId};
+use frame_support::PalletId;
 pub use pallet::*;
 
 #[cfg(test)]
@@ -46,10 +48,10 @@ pub mod pallet {
     use ethabi::Token;
     use frame_support::dispatch::RawOrigin;
     use frame_support::pallet_prelude::*;
+    use frame_support::traits::{IsSubType, UnfilteredDispatchable};
     use frame_system::pallet_prelude::*;
-    use pallet_utility::WeightInfo as UtilityWeightInfo;
     use sp_core::H256;
-    use sp_runtime::traits::AccountIdConversion;
+    use sp_runtime::traits::{AccountIdConversion, Dispatchable};
     use sp_runtime::ArithmeticError;
 
     use super::*;
@@ -73,13 +75,26 @@ pub mod pallet {
     /// depends on other super-traits, the latter must be added to this trait,
     /// Note that [`frame_system::Config`] must always be included.
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_utility::Config {
+    pub trait Config: frame_system::Config {
         /// The Gateway Origin Pallet Identifier
         #[pallet::constant]
         type PalletId: Get<PalletId>;
 
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// The overarching call type.
+        type RuntimeCall: Parameter
+            + Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
+            + GetDispatchInfo
+            + From<frame_system::Call<Self>>
+            + UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+            + IsSubType<Call<Self>>
+            + IsType<<Self as frame_system::Config>::RuntimeCall>;
+
+        /// Self chain Identifier
+        #[pallet::constant]
+        type ChainId: Get<u32>;
 
         /// Weight information for extrinsics in this pallet
         type WeightInfo: WeightInfo;
@@ -98,7 +113,21 @@ pub mod pallet {
             new_operator_hash: H256,
             new_epoch: u64,
         },
+        BatchCompleted,
+        BatchCompletedWithErrors,
+        ItemCompleted,
+        ItemFailed {
+            index: u32,
+            error: DispatchError,
+        },
     }
+
+    // Code block taken from: https://github.com/paritytech/substrate/blob/ee316317b85b2f65fc022b27bbfefcd42b6560ae/frame/utility/src/lib.rs#L128
+    // Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
+    // the `size_of` of the `Call` can be different. To ensure that this don't leads to
+    // mismatches between native/wasm or to different metadata for the same runtime, we
+    // algin the call size. The value is chosen big enough to hopefully never reach it.
+    const CALL_ALIGN: u32 = 1024;
 
     // ------------------------------------------------------------------------
     // Pallet storage
@@ -132,6 +161,30 @@ pub mod pallet {
         ValueQuery,
     >;
 
+    #[pallet::storage]
+    #[pallet::getter(fn command_executed)]
+    pub(super) type CommandExecuted<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        // Command Id
+        H256,
+        // Flag
+        bool,
+        ValueQuery,
+    >;
+
+    // #[pallet::storage]
+    // #[pallet::getter(fn command_executed)]
+    // pub(super) type ContractCallApproved<T: Config> = StorageMap<
+    //     _,
+    //     Blake2_128Concat,
+    //     // Hash of contract call uniqueness
+    //     H256,
+    //     // Flag
+    //     bool,
+    //     ValueQuery,
+    // >;
+
     // ------------------------------------------------------------------------
     // Pallet errors
     // ------------------------------------------------------------------------
@@ -142,11 +195,12 @@ pub mod pallet {
         InvalidWeights,
         InvalidThreshold,
         DuplicateOperators,
-
-        /// Failed to decode the proof
         FailedToDecodeProof,
-        /// Proof validation failed
         InvalidProof,
+        NotActiveOperators,
+        TooManyCalls,
+        CommandIdsLengthMismatch,
+        WrongChainId,
     }
 
     // ------------------------------------------------------------------------
@@ -162,7 +216,7 @@ pub mod pallet {
             let dispatch_weight = dispatch_infos.iter()
                 .map(|di| di.weight)
                 .fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
-                .saturating_add(<pallet_utility::weights::SubstrateWeight<T> as UtilityWeightInfo>::force_batch(calls.len() as u32));
+                .saturating_add(<T as pallet::Config>::WeightInfo::execute(calls.len() as u32));
             let dispatch_class = {
                 let all_operational = dispatch_infos.iter()
                     .map(|di| di.class)
@@ -177,19 +231,81 @@ pub mod pallet {
         })]
         pub fn execute(
             origin: OriginFor<T>,
-            _proof: u64,
-            calls: Vec<<T as pallet_utility::Config>::RuntimeCall>,
+            proof: Vec<u8>,
+            chain_id: u32,
+            command_ids: Vec<H256>,
+            commands: Vec<String>,
+            calls: Vec<<T as Config>::RuntimeCall>,
         ) -> DispatchResultWithPostInfo {
             let _ = ensure_signed(origin)?;
-            // PLACEHOLDER: Verify command batch proof
-            pallet_utility::Pallet::<T>::force_batch(
-                RawOrigin::Signed(Self::account_id()).into(),
-                calls,
-            )
+
+            // TODO: Once XCM is enabled this check might not make sense
+            ensure!(chain_id == T::ChainId::get(), Error::<T>::WrongChainId);
+
+            ensure!(
+                calls.len() == command_ids.len(),
+                Error::<T>::CommandIdsLengthMismatch
+            );
+
+            let payload = Self::abi_encode_batch_params(chain_id.clone(), command_ids.clone(), commands.clone(), calls.clone());
+            let mut is_active_operators =
+                Self::validate_proof(H256::from(sp_core::keccak_256(&payload)), &proof)?;
+
+            let gateway_origin = RawOrigin::Signed(Self::account_id());
+            // Code simplified taken from https://github.com/paritytech/substrate/blob/ee316317b85b2f65fc022b27bbfefcd42b6560ae/frame/utility/src/lib.rs#L440
+            let calls_len = calls.len();
+            ensure!(
+                calls_len <= Self::batched_calls_limit() as usize,
+                Error::<T>::TooManyCalls
+            );
+
+            // Track the actual weight of each of the batch calls.
+            let mut weight = Weight::zero();
+            // Track failed dispatch occur.
+            let mut has_error: bool = false;
+            for (idx, call) in calls.into_iter().enumerate() {
+                if <CommandExecuted<T>>::get(command_ids[idx]) {
+                    continue;
+                }
+
+                if let Some(Call::transfer_operatorship { .. }) = call.is_sub_type() {
+                    if !is_active_operators {
+                        continue;
+                    }
+                    is_active_operators = false;
+                // TODO: Do we need the approve flow or trigger final execution instead
+                // else if { Some(Call::approve_contract_call { .. }) = call.is_sub_type() }
+                } else { // Do not execute if call not allowed, just skip
+                    continue;
+                }
+
+                let info = call.get_dispatch_info();
+                <CommandExecuted<T>>::set(command_ids[idx], true);
+                // TODO: Should we honor the original sender? if so how to do that
+                // If origin is root, don't apply any dispatch filters; root can call anything.
+                let result = call.dispatch(gateway_origin.clone().into());
+                // Add the weight of this call.
+                weight = weight.saturating_add(extract_actual_weight(&result, &info));
+                if let Err(e) = result {
+                    has_error = true;
+                    <CommandExecuted<T>>::set(command_ids[idx], false);
+                    Self::deposit_event(Event::ItemFailed { index: idx as u32, error: e.error });
+                } else {
+                    Self::deposit_event(Event::ItemCompleted);
+                }
+            }
+
+            if has_error {
+                Self::deposit_event(Event::BatchCompletedWithErrors);
+            } else {
+                Self::deposit_event(Event::BatchCompleted);
+            }
+
+            let base_weight = <T as pallet::Config>::WeightInfo::execute(calls_len as u32);
+            Ok(Some(base_weight.saturating_add(weight)).into())
         }
 
         #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship(new_operators.len() as u32))]
-        #[transactional]
         pub fn transfer_operatorship(
             origin: OriginFor<T>,
             new_operators: Vec<[u8; 20]>,
@@ -224,6 +340,19 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
+        // Code taken from https://github.com/paritytech/substrate/blob/ee316317b85b2f65fc022b27bbfefcd42b6560ae/frame/utility/src/lib.rs#L133
+        fn batched_calls_limit() -> u32 {
+            let allocator_limit = sp_core::MAX_POSSIBLE_ALLOCATION;
+            let call_size =
+                ((sp_std::mem::size_of::<<T as Config>::RuntimeCall>() as u32 + CALL_ALIGN - 1)
+                    / CALL_ALIGN)
+                    * CALL_ALIGN;
+            // The margin to take into account vec doubling capacity.
+            let margin_factor = 3;
+
+            allocator_limit / margin_factor / call_size
+        }
+
         pub fn account_id() -> T::AccountId {
             T::PalletId::get().into_account_truncating()
         }
@@ -311,6 +440,20 @@ pub mod pallet {
         ///   - The `operators_epoch` is not expired, i.e., it's within the OLD_KEY_RETENTION period.
         fn valid_operators(operators_epoch: u64, current_epoch: u64) -> bool {
             operators_epoch != 0 && current_epoch - operators_epoch < OLD_KEY_RETENTION
+        }
+
+        pub fn abi_encode_batch_params(chain_id: u32, command_ids: Vec<H256>, commands: Vec<String>, calls: Vec<<T as Config>::RuntimeCall>) -> ethabi::Bytes {
+            // TODO: verify calling encode() on H256 doesnt double encode
+            let command_ids_token: Vec<Token> = command_ids.into_iter().map(|x| { Token::FixedBytes(x.encode()) }).collect();
+            let commands_token: Vec<Token> = commands.into_iter().map(|x| { Token::String(x.into()) } ).collect();
+            let calls_token: Vec<Token> = calls.into_iter().map(|x| { Token::Bytes(x.encode().into()) }).collect();
+
+            ethabi::encode(&[
+                Token::Uint(ethabi::Uint::from(chain_id)),
+                Token::Array(command_ids_token),
+                Token::Array(commands_token),
+                Token::Array(calls_token),
+            ])
         }
     }
 }

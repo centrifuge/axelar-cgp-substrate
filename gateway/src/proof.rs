@@ -139,7 +139,7 @@ pub mod proof_tests {
     use super::*;
     use ecdsa::to_eth_signed_message_hash;
     use ethabi::Token;
-    use sp_core::keccak_256;
+    use sp_core::{H160, keccak_256};
     use sp_std::vec;
 
     #[test]
@@ -181,8 +181,22 @@ pub mod proof_tests {
         assert!(validate_signatures(msg_hash, proof,).is_ok());
     }
 
+    #[test]
+    fn test_sign_verify_flow() {
+        let msg = vec![0_u8, 1_u8];
+        let msg_hash = H256::from_slice(&to_eth_signed_message_hash(keccak_256(msg.as_slice())));
+        let (public, secret) = ecdsa::generate_keypair();
+        let pk_hash = H160::from(H256::from_slice(keccak_256(&public).as_slice()));
+        let sig = ecdsa::sign_message(msg_hash, &secret);
+        assert_eq!(sig.len(), 65);
+        match ecdsa::recover(msg_hash, sig).ok() {
+            None => { panic!("should not happen") }
+            Some(signer) => { assert_eq!(pk_hash.0, signer.0) }
+        }
+    }
+
     /// Test utils function that encodes the data of a proof to ethabi::Bytes
-    fn encode(
+    pub fn encode(
         operators: Vec<[u8; 20]>,
         weights: Vec<u128>,
         threshold: u128,
