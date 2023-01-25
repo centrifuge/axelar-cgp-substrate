@@ -18,17 +18,6 @@ pub fn recover(hash: H256, signature: Vec<u8>) -> Result<H160, EcdsaVerifyError>
     Ok(H160::from(H256::from_slice(keccak_256(&pubkey).as_slice())))
 }
 
-pub fn recover_2(msg: H256, sig: [u8; 64], rec_id: u8) -> Result<H160, EcdsaVerifyError> {
-    let pubkey = recover2(
-        &Message::parse(msg.as_fixed_bytes()),
-        &Signature::parse_standard(&sig).unwrap(),
-        &RecoveryId::parse(rec_id).unwrap(),
-    );
-    Ok(H160::from(H256::from_slice(
-        keccak_256(pubkey.unwrap().serialize().as_slice()).as_slice(),
-    )))
-}
-
 /// Returns Signature (r,s,v) concatenated
 #[allow(dead_code)]
 pub fn sign_message(msg: H256, secret: &[u8; 32]) -> Vec<u8> {
