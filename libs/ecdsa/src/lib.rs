@@ -1,7 +1,5 @@
 use eth_encode_packed::{abi::encode_packed, SolidityDataType};
-use libsecp256k1::{
-    recover as recover2, sign, Message, PublicKey, RecoveryId, SecretKey, Signature,
-};
+use libsecp256k1::{sign, Message, PublicKey, SecretKey};
 use sp_core::{keccak_256, H160, H256};
 use sp_io::EcdsaVerifyError;
 

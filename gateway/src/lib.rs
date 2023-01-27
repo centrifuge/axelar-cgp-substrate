@@ -50,7 +50,7 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::traits::{IsSubType, UnfilteredDispatchable};
     use frame_system::pallet_prelude::*;
-    use sp_core::H256;
+    use sp_core::{keccak_256, H256};
     use sp_runtime::traits::{AccountIdConversion, Dispatchable};
     use sp_runtime::ArithmeticError;
 
@@ -168,20 +168,21 @@ pub mod pallet {
         Blake2_128Concat,
         // Command Id
         H256,
-        // Flag
-        bool,
+        // Empty
+        (),
         ValueQuery,
     >;
 
+    // TODO: Enable block when adding approveContractCall
     // #[pallet::storage]
-    // #[pallet::getter(fn command_executed)]
+    // #[pallet::getter(fn contract_call_approved)]
     // pub(super) type ContractCallApproved<T: Config> = StorageMap<
     //     _,
     //     Blake2_128Concat,
     //     // Hash of contract call uniqueness
     //     H256,
-    //     // Flag
-    //     bool,
+    //     // Empty
+    //     (),
     //     ValueQuery,
     // >;
 
@@ -209,8 +210,14 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        // Weight definition taken from Substrate Utility.force_batch, not sure if there is a more succinct and maintainable
-        // way to ensure the call is properly weighted
+        /// Executes a batch of calls previously approved by the Axelar Consensus
+        ///
+        /// command_ids: ordered list of uuid that identify each command within the batch
+        /// commands: ordered list of which command triggered the call. It is a fixed set of options burnToken|contractCall|...
+        /// calls: the actual call to be executed in the gateway contract (it contains as well any other final calls)
+        ///
+        /// The weight definition taken from Substrate Utility.force_batch, not sure if there is a more succinct and maintainable
+        /// way to ensure the call is properly weighted
         #[pallet::weight({
             let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
             let dispatch_weight = dispatch_infos.iter()
@@ -253,8 +260,11 @@ pub mod pallet {
                 commands.clone(),
                 calls.clone(),
             );
-            let mut is_active_operators =
-                Self::validate_proof(H256::from(sp_core::keccak_256(&payload)), &proof)?;
+            // TODO: Double check on Axelar if they always prepend the eth prefix
+            let payload_hash = H256::from_slice(&ecdsa::to_eth_signed_message_hash(keccak_256(
+                payload.as_slice(),
+            )));
+            let mut is_active_operators = Self::validate_proof(payload_hash, &proof)?;
 
             let gateway_origin = RawOrigin::Signed(Self::account_id());
             // Code simplified taken from https://github.com/paritytech/substrate/blob/ee316317b85b2f65fc022b27bbfefcd42b6560ae/frame/utility/src/lib.rs#L440
@@ -267,9 +277,9 @@ pub mod pallet {
             // Track the actual weight of each of the batch calls.
             let mut weight = Weight::zero();
             // Track failed dispatch occur.
-            let mut has_error: bool = false;
+            let mut has_error = false;
             for (idx, call) in calls.into_iter().enumerate() {
-                if <CommandExecuted<T>>::get(command_ids[idx]) {
+                if <CommandExecuted<T>>::contains_key(command_ids[idx]) {
                     continue;
                 }
 
@@ -286,15 +296,14 @@ pub mod pallet {
                 }
 
                 let info = call.get_dispatch_info();
-                <CommandExecuted<T>>::set(command_ids[idx], true);
-                // TODO: Should we honor the original sender? if so how to do that
+                <CommandExecuted<T>>::set(command_ids[idx], ());
                 // If origin is root, don't apply any dispatch filters; root can call anything.
                 let result = call.dispatch(gateway_origin.clone().into());
                 // Add the weight of this call.
                 weight = weight.saturating_add(extract_actual_weight(&result, &info));
                 if let Err(e) = result {
                     has_error = true;
-                    <CommandExecuted<T>>::set(command_ids[idx], false);
+                    <CommandExecuted<T>>::remove(command_ids[idx]);
                     Self::deposit_event(Event::ItemFailed {
                         index: idx as u32,
                         error: e.error,
@@ -451,6 +460,7 @@ pub mod pallet {
             operators_epoch != 0 && current_epoch - operators_epoch < OLD_KEY_RETENTION
         }
 
+        /// Encodes batch params to ABI, so proof can be verified
         pub fn abi_encode_batch_params(
             chain_id: u32,
             command_ids: Vec<H256>,

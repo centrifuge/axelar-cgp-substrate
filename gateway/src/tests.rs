@@ -247,6 +247,159 @@ fn decode_sample_batch_params() {
 }
 
 #[test]
+fn execute_simple_batch_success() {
+    ExtBuilder::default().build().execute_with(|| {
+        // Prep new operators call
+        let operator_2 = ecdsa::generate_keypair();
+        let operator_3 = ecdsa::generate_keypair();
+        let operator_2_public = H160::from(H256::from_slice(keccak_256(&operator_2.0).as_slice()));
+        let operator_3_public = H160::from(H256::from_slice(keccak_256(&operator_3.0).as_slice()));
+        let mut new_operators = vec![
+            operator_2_public.to_fixed_bytes(),
+            operator_3_public.to_fixed_bytes(),
+        ];
+        new_operators.sort();
+        let inner_call = RuntimeCall::AxelarGateway(AxelarGatewayCall::transfer_operatorship {
+            new_operators,
+            new_weights: vec![40, 60],
+            new_threshold: 50u128,
+        });
+        //
+
+        let chain_id = 36_u32;
+        let command_id = H256::from_slice(
+            &hex::decode("eeccf7fbb3e9555e6b6111e1ccf0382b0ffa7c66cde0d69d1bdb1b80b6fc2ee3")
+                .expect(""),
+        );
+        let command_x: String = String::from("transferOperatorship");
+
+        let batch_msg: ethabi::Bytes = AxelarGateway::abi_encode_batch_params(
+            chain_id,
+            vec![command_id.clone()],
+            vec![command_x.clone()],
+            vec![inner_call.clone()],
+        );
+        let sign_msg = ecdsa::to_eth_signed_message_hash(keccak_256(batch_msg.as_slice()));
+
+        let operator_0 = ecdsa::generate_keypair();
+        let operator_1 = ecdsa::generate_keypair();
+        let operator_0_public = H160::from(H256::from_slice(keccak_256(&operator_0.0).as_slice()));
+        let operator_1_public = H160::from(H256::from_slice(keccak_256(&operator_1.0).as_slice()));
+        let sig_0 = ecdsa::sign_message(H256::from_slice(&sign_msg), &operator_0.1);
+        let sig_1 = ecdsa::sign_message(H256::from_slice(&sign_msg), &operator_1.1);
+        let proof_bytes = proof::proof_tests::encode(
+            vec![
+                operator_0_public.to_fixed_bytes(),
+                operator_1_public.to_fixed_bytes(),
+            ],
+            vec![50u128, 50u128],
+            50u128,
+            vec![sig_0, sig_1],
+        )
+        .to_vec();
+
+        // Calculate Operators Hash dynamically
+        let op0_addr = Token::Address(operator_0_public.to_fixed_bytes().into())
+            .into_address()
+            .unwrap();
+        let op1_addr = Token::Address(operator_1_public.to_fixed_bytes().into())
+            .into_address()
+            .unwrap();
+        let operators_hash =
+            proof::operators_hash(vec![op0_addr, op1_addr], vec![50u128, 50u128], 50u128);
+
+        // Completes batch without state change when operators are not current
+        EpochForHash::<Runtime>::insert(operators_hash, 100);
+        CurrentEpoch::<Runtime>::set(101);
+        assert_ok!(AxelarGateway::execute(
+            RuntimeOrigin::signed(ALICE),
+            proof_bytes.clone(),
+            chain_id,
+            vec![command_id],
+            vec![command_x.clone()],
+            vec![inner_call.clone()]
+        ));
+
+        event_exists(Event::<Runtime>::BatchCompleted {});
+        assert_eq!(CurrentEpoch::<Runtime>::get(), 101);
+        assert_eq!(CommandExecuted::<Runtime>::contains_key(command_id), false);
+
+        // Runs command when operators are current
+        CurrentEpoch::<Runtime>::set(100);
+        assert_ok!(AxelarGateway::execute(
+            RuntimeOrigin::signed(ALICE),
+            proof_bytes,
+            chain_id,
+            vec![command_id],
+            vec![command_x],
+            vec![inner_call]
+        ));
+
+        event_exists(Event::<Runtime>::BatchCompleted {});
+        assert_eq!(CurrentEpoch::<Runtime>::get(), 101);
+        assert!(CommandExecuted::<Runtime>::contains_key(command_id));
+    });
+}
+
+#[test]
+fn execute_simple_batch_invalid_proof() {
+    ExtBuilder::default().build().execute_with(|| {
+        // Invalid Operators
+        let inner_call = RuntimeCall::AxelarGateway(AxelarGatewayCall::transfer_operatorship {
+            new_operators: vec![],
+            new_weights: vec![],
+            new_threshold: 0u128,
+        });
+
+        let chain_id = 36_u32;
+        let command_id = H256::from_slice(
+            &hex::decode("eeccf7fbb3e9555e6b6111e1ccf0382b0ffa7c66cde0d69d1bdb1b80b6fc2ee3")
+                .expect(""),
+        );
+        let command_x: String = String::from("transferOperatorship");
+
+        let operator_0 = ecdsa::generate_keypair();
+        let operator_1 = ecdsa::generate_keypair();
+        let operator_0_public = H160::from(H256::from_slice(keccak_256(&operator_0.0).as_slice()));
+        let operator_1_public = H160::from(H256::from_slice(keccak_256(&operator_1.0).as_slice()));
+        let proof_bytes = proof::proof_tests::encode(
+            vec![
+                operator_0_public.to_fixed_bytes(),
+                operator_1_public.to_fixed_bytes(),
+            ],
+            vec![50, 50],
+            50u128,
+            vec![vec![0u8], vec![0u8]],
+        )
+        .to_vec();
+
+        // Calculate Operators Hash dynamically
+        let op0_addr = Token::Address(operator_0_public.to_fixed_bytes().into())
+            .into_address()
+            .unwrap();
+        let op1_addr = Token::Address(operator_1_public.to_fixed_bytes().into())
+            .into_address()
+            .unwrap();
+        let operators_hash = proof::operators_hash(vec![op0_addr, op1_addr], vec![50, 50], 50u128);
+
+        EpochForHash::<Runtime>::insert(operators_hash, 100);
+        CurrentEpoch::<Runtime>::set(115);
+
+        assert_noop!(
+            AxelarGateway::execute(
+                RuntimeOrigin::signed(ALICE),
+                proof_bytes,
+                chain_id,
+                vec![command_id],
+                vec![command_x],
+                vec![inner_call]
+            ),
+            Error::<Runtime>::InvalidProof
+        );
+    });
+}
+
+#[test]
 fn execute_simple_batch_invalid_operators() {
     ExtBuilder::default().build().execute_with(|| {
         // Invalid Operators
@@ -261,7 +414,7 @@ fn execute_simple_batch_invalid_operators() {
             &hex::decode("eeccf7fbb3e9555e6b6111e1ccf0382b0ffa7c66cde0d69d1bdb1b80b6fc2ee3")
                 .expect(""),
         );
-        let command_x: String = String::from("approveContractCall");
+        let command_x: String = String::from("transferOperatorship");
 
         let batch_msg: ethabi::Bytes = AxelarGateway::abi_encode_batch_params(
             chain_id,
@@ -299,5 +452,86 @@ fn execute_simple_batch_invalid_operators() {
             ),
             Error::<Runtime>::InvalidOperators
         );
+    });
+}
+
+#[test]
+fn execute_simple_batch_error_invalid_order_operators() {
+    ExtBuilder::default().build().execute_with(|| {
+        // Prep new operators call
+        let operator_2 = ecdsa::generate_keypair();
+        let operator_3 = ecdsa::generate_keypair();
+        let operator_2_public = H160::from(H256::from_slice(keccak_256(&operator_2.0).as_slice()));
+        let operator_3_public = H160::from(H256::from_slice(keccak_256(&operator_3.0).as_slice()));
+        let mut new_operators = vec![
+            operator_2_public.to_fixed_bytes(),
+            operator_3_public.to_fixed_bytes(),
+        ];
+        // Sort descendent instead of ascendent
+        new_operators.sort_by(|a, b| b.cmp(a));
+        let inner_call = RuntimeCall::AxelarGateway(AxelarGatewayCall::transfer_operatorship {
+            new_operators,
+            new_weights: vec![40, 60],
+            new_threshold: 50u128,
+        });
+        //
+
+        let chain_id = 36_u32;
+        let command_id = H256::from_slice(
+            &hex::decode("eeccf7fbb3e9555e6b6111e1ccf0382b0ffa7c66cde0d69d1bdb1b80b6fc2ee3")
+                .expect(""),
+        );
+        let command_x: String = String::from("transferOperatorship");
+
+        let batch_msg: ethabi::Bytes = AxelarGateway::abi_encode_batch_params(
+            chain_id,
+            vec![command_id.clone()],
+            vec![command_x.clone()],
+            vec![inner_call.clone()],
+        );
+        let sign_msg = ecdsa::to_eth_signed_message_hash(keccak_256(batch_msg.as_slice()));
+
+        let operator_0 = ecdsa::generate_keypair();
+        let operator_1 = ecdsa::generate_keypair();
+        let operator_0_public = H160::from(H256::from_slice(keccak_256(&operator_0.0).as_slice()));
+        let operator_1_public = H160::from(H256::from_slice(keccak_256(&operator_1.0).as_slice()));
+        let sig_0 = ecdsa::sign_message(H256::from_slice(&sign_msg), &operator_0.1);
+        let sig_1 = ecdsa::sign_message(H256::from_slice(&sign_msg), &operator_1.1);
+        let proof_bytes = proof::proof_tests::encode(
+            vec![
+                operator_0_public.to_fixed_bytes(),
+                operator_1_public.to_fixed_bytes(),
+            ],
+            vec![50u128, 50u128],
+            50u128,
+            vec![sig_0, sig_1],
+        )
+        .to_vec();
+
+        // Calculate Operators Hash dynamically
+        let op0_addr = Token::Address(operator_0_public.to_fixed_bytes().into())
+            .into_address()
+            .unwrap();
+        let op1_addr = Token::Address(operator_1_public.to_fixed_bytes().into())
+            .into_address()
+            .unwrap();
+        let operators_hash =
+            proof::operators_hash(vec![op0_addr, op1_addr], vec![50u128, 50u128], 50u128);
+
+        // Completes batch without state change when operators are not current
+        EpochForHash::<Runtime>::insert(operators_hash, 100);
+        CurrentEpoch::<Runtime>::set(100);
+        assert_ok!(AxelarGateway::execute(
+            RuntimeOrigin::signed(ALICE),
+            proof_bytes.clone(),
+            chain_id,
+            vec![command_id],
+            vec![command_x.clone()],
+            vec![inner_call.clone()]
+        ));
+
+        event_exists(Event::<Runtime>::BatchCompletedWithErrors {});
+        assert_eq!(CurrentEpoch::<Runtime>::get(), 100);
+        assert_eq!(CommandExecuted::<Runtime>::contains_key(command_id), false);
     });
 }
