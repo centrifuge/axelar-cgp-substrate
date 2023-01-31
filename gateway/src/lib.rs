@@ -50,7 +50,7 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::traits::{IsSubType, UnfilteredDispatchable};
     use frame_system::pallet_prelude::*;
-    use sp_core::{keccak_256, H256};
+    use sp_core::{keccak_256, H160, H256, U256};
     use sp_runtime::traits::{AccountIdConversion, Dispatchable};
     use sp_runtime::ArithmeticError;
 
@@ -113,6 +113,15 @@ pub mod pallet {
             new_operator_hash: H256,
             new_epoch: u64,
         },
+        ContractCallApproved {
+            command_id: H256,
+            source_chain: String,
+            source_address: String,
+            contract_address: H160,
+            payload_hash: H256,
+            source_tx_hash: H256,
+            source_event_index: U256,
+        },
         BatchCompleted,
         BatchCompletedWithErrors,
         ItemCompleted,
@@ -173,18 +182,17 @@ pub mod pallet {
         ValueQuery,
     >;
 
-    // TODO: Enable block when adding approveContractCall
-    // #[pallet::storage]
-    // #[pallet::getter(fn contract_call_approved)]
-    // pub(super) type ContractCallApproved<T: Config> = StorageMap<
-    //     _,
-    //     Blake2_128Concat,
-    //     // Hash of contract call uniqueness
-    //     H256,
-    //     // Empty
-    //     (),
-    //     ValueQuery,
-    // >;
+    #[pallet::storage]
+    #[pallet::getter(fn contract_call_approved)]
+    pub(super) type ContractCallApproved<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        // Hash of contract call uniqueness
+        H256,
+        // Empty
+        (),
+        ValueQuery,
+    >;
 
     // ------------------------------------------------------------------------
     // Pallet errors
@@ -283,21 +291,20 @@ pub mod pallet {
                     continue;
                 }
 
-                if let Some(Call::transfer_operatorship { .. }) = call.is_sub_type() {
-                    if !is_active_operators {
-                        continue;
+                match call.is_sub_type() {
+                    Some(Call::transfer_operatorship { .. }) => {
+                        if !is_active_operators {
+                            continue;
+                        }
+                        is_active_operators = false;
                     }
-                    is_active_operators = false;
-                // TODO: Do we need the approve flow or trigger final execution instead
-                // else if { Some(Call::approve_contract_call { .. }) = call.is_sub_type() }
-                } else {
-                    // Do not execute if call not allowed, just skip
-                    continue;
+                    Some(Call::approve_contract_call { .. }) => {}
+                    _ => continue,
                 }
 
                 let info = call.get_dispatch_info();
                 <CommandExecuted<T>>::set(command_ids[idx], ());
-                // If origin is root, don't apply any dispatch filters; root can call anything.
+
                 let result = call.dispatch(gateway_origin.clone().into());
                 // Add the weight of this call.
                 weight = weight.saturating_add(extract_actual_weight(&result, &info));
@@ -353,6 +360,49 @@ pub mod pallet {
                 new_epoch: epoch,
             });
 
+            Ok(())
+        }
+
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_contract_call())]
+        pub fn approve_contract_call(
+            origin: OriginFor<T>,
+            source_chain: String,
+            source_address: String,
+            contract_address: H160,
+            payload_hash: H256,
+            source_tx_hash: H256,
+            source_event_index: U256,
+            command_id: H256,
+        ) -> DispatchResult {
+            // Ensure only gateway origin can call this
+            let _ = EnsureGateway::<T>::ensure_origin(origin)?;
+
+            let mut payload = command_id.encode();
+            payload.append(&mut source_chain.encode());
+            payload.append(&mut source_address.encode());
+            payload.append(&mut contract_address.encode());
+            payload.append(&mut payload_hash.encode());
+
+            <ContractCallApproved<T>>::set(H256::from(keccak_256(payload.as_slice())), ());
+
+            Self::deposit_event(Event::ContractCallApproved {
+                command_id,
+                source_chain,
+                source_address,
+                contract_address,
+                payload_hash,
+                source_tx_hash,
+                source_event_index,
+            });
+
+            Ok(())
+        }
+
+        pub fn execute_approved_call(
+            origin: OriginFor<T>,
+        ) -> DispatchResult {
+            let _ = ensure_signed(origin)?;
+            
             Ok(())
         }
     }

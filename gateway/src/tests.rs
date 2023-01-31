@@ -1,9 +1,10 @@
 use super::*;
+use codec::Encode;
 use ethabi::{ParamType, Token};
 use frame_support::{assert_noop, assert_ok};
 use mock::*;
 use pallet::Call as AxelarGatewayCall;
-use sp_core::{keccak_256, H160, H256};
+use sp_core::{keccak_256, H160, H256, U256};
 use sp_runtime::traits::BadOrigin;
 
 #[test]
@@ -131,6 +132,67 @@ fn transfer_operatorship() {
             new_operator_hash: precomputed_hash,
             new_epoch,
         });
+    });
+}
+
+#[test]
+fn approve_contract_call() {
+    ExtBuilder::default().build().execute_with(|| {
+        let source_chain = String::from("ethereum");
+        let source_address = String::from("0x5f927395213ee6b95de97bddcb1b2b1c0f16844d");
+        let contract_address = H160::random();
+        let payload_hash = H256::random();
+        let source_tx_hash = H256::random();
+        let source_event_index = U256::from(100);
+        let command_id = H256::random();
+
+        // Final call hash prep
+        let mut call_hash_payload = command_id.encode();
+        call_hash_payload.append(&mut source_chain.encode());
+        call_hash_payload.append(&mut source_address.encode());
+        call_hash_payload.append(&mut contract_address.encode());
+        call_hash_payload.append(&mut payload_hash.encode());
+
+        // Wrong Origin
+        assert_noop!(
+            AxelarGateway::approve_contract_call(
+                RuntimeOrigin::signed(ALICE),
+                source_chain.clone(),
+                source_address.clone(),
+                contract_address,
+                payload_hash,
+                source_tx_hash,
+                source_event_index,
+                command_id
+            ),
+            BadOrigin,
+        );
+
+        let gw_account_id = AxelarGateway::account_id();
+        assert_ok!(AxelarGateway::approve_contract_call(
+            RuntimeOrigin::signed(gw_account_id),
+            source_chain.clone(),
+            source_address.clone(),
+            contract_address,
+            payload_hash,
+            source_tx_hash,
+            source_event_index,
+            command_id
+        ));
+
+        event_exists(Event::<Runtime>::ContractCallApproved {
+            command_id,
+            source_chain,
+            source_address,
+            contract_address,
+            payload_hash,
+            source_tx_hash,
+            source_event_index,
+        });
+
+        assert!(ContractCallApproved::<Runtime>::contains_key(H256::from(
+            keccak_256(call_hash_payload.as_slice())
+        )));
     });
 }
 
