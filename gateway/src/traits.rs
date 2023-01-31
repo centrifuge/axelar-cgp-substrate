@@ -22,6 +22,7 @@ pub trait WeightInfo {
     fn execute(c: u32) -> Weight;
     fn transfer_operatorship(c: u32) -> Weight;
     fn approve_contract_call() -> Weight;
+    fn execute_approved_call() -> Weight;
 }
 
 // For backwards compatibility and tests
@@ -39,6 +40,9 @@ impl WeightInfo for () {
             .saturating_add(Weight::from_ref_time(3_510_555 as u64).saturating_mul(c as u64))
     }
     fn approve_contract_call() -> Weight {
+        Weight::from_ref_time(17_443_346 as u64)
+    }
+    fn execute_approved_call() -> Weight {
         Weight::from_ref_time(17_443_346 as u64)
     }
 }

@@ -398,11 +398,10 @@ pub mod pallet {
             Ok(())
         }
 
-        pub fn execute_approved_call(
-            origin: OriginFor<T>,
-        ) -> DispatchResult {
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::execute_approved_call())]
+        pub fn execute_approved_call(origin: OriginFor<T>) -> DispatchResult {
             let _ = ensure_signed(origin)?;
-            
+
             Ok(())
         }
     }
