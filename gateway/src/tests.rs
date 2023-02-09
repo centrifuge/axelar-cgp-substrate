@@ -2,10 +2,12 @@ use super::*;
 use codec::Encode;
 use ethabi::{ParamType, Token};
 use frame_support::{assert_noop, assert_ok};
+use frame_system::Call as SystemCall;
 use mock::*;
 use pallet::Call as AxelarGatewayCall;
 use sp_core::{keccak_256, H160, H256, U256};
 use sp_runtime::traits::BadOrigin;
+use sp_runtime::DispatchError;
 
 #[test]
 fn accounts_ordered() {
@@ -595,5 +597,97 @@ fn execute_simple_batch_error_invalid_order_operators() {
         event_exists(Event::<Runtime>::BatchCompletedWithErrors {});
         assert_eq!(CurrentEpoch::<Runtime>::get(), 100);
         assert_eq!(CommandExecuted::<Runtime>::contains_key(command_id), false);
+    });
+}
+
+#[test]
+fn forward_valid_approved_call() {
+    ExtBuilder::default().build().execute_with(|| {
+        let inner_call = RuntimeCall::System(SystemCall::remark { remark: vec![10] });
+        let inner_call_bytes = inner_call.encode();
+
+        let command_id = H256::random();
+        let source_chain = String::from("ethereum");
+        let source_address = String::from("0x5f927395213ee6b95de97bddcb1b2b1c0f16844d");
+        let contract_address = H160::random();
+
+        assert_noop!(
+            AxelarGateway::forward_approved_call(
+                RuntimeOrigin::signed(ALICE),
+                command_id,
+                source_chain.clone(),
+                source_address.clone(),
+                contract_address,
+                inner_call_bytes.clone(),
+            ),
+            Error::<Runtime>::ContractCallNotApproved
+        );
+
+        let call_hash = H256::from_slice(&ecdsa::to_eth_signed_message_hash(keccak_256(
+            inner_call_bytes.as_slice(),
+        )));
+        let mut approved_call = command_id.encode();
+        approved_call.append(&mut source_chain.encode());
+        approved_call.append(&mut source_address.encode());
+        approved_call.append(&mut contract_address.encode());
+        approved_call.append(&mut call_hash.encode());
+
+        let approved_call_hash = H256::from(keccak_256(approved_call.as_slice()));
+
+        ContractCallApproved::<Runtime>::set(approved_call_hash, ());
+
+        assert_ok!(AxelarGateway::forward_approved_call(
+            RuntimeOrigin::signed(ALICE),
+            command_id,
+            source_chain,
+            source_address,
+            contract_address,
+            inner_call_bytes,
+        ));
+
+        assert!(!ContractCallApproved::<Runtime>::contains_key(
+            approved_call_hash
+        ))
+    });
+}
+
+#[test]
+fn forward_invalid_approved_call() {
+    ExtBuilder::default().build().execute_with(|| {
+        // Balance.transfer call - not defined in local test runtime
+        let inner_call_bytes = hex::decode("140000a8ec81084413b23c6b933fb62300361093a18cb37457c88d3db9813714fd95412f00000000109f4bb31507c97bce97c0").expect("");
+
+        let command_id = H256::random();
+        let source_chain = String::from("ethereum");
+        let source_address = String::from("0x5f927395213ee6b95de97bddcb1b2b1c0f16844d");
+        let contract_address = H160::random();
+
+        let call_hash = H256::from_slice(&ecdsa::to_eth_signed_message_hash(keccak_256(
+            inner_call_bytes.as_slice(),
+        )));
+        let mut approved_call = command_id.encode();
+        approved_call.append(&mut source_chain.encode());
+        approved_call.append(&mut source_address.encode());
+        approved_call.append(&mut contract_address.encode());
+        approved_call.append(&mut call_hash.encode());
+
+        let approved_call_hash = H256::from(keccak_256(approved_call.as_slice()));
+
+        ContractCallApproved::<Runtime>::set(approved_call_hash, ());
+
+        assert_noop!(
+            AxelarGateway::forward_approved_call(
+                RuntimeOrigin::signed(ALICE),
+                command_id,
+                source_chain,
+                source_address,
+                contract_address,
+                inner_call_bytes,
+            ),
+            DispatchError::CannotLookup
+        );
+
+        // In local executions only an error will revert the state, so the contract call will still be approved
+        assert!(ContractCallApproved::<Runtime>::contains_key(approved_call_hash))
     });
 }

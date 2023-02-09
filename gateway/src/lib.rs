@@ -48,11 +48,13 @@ pub mod pallet {
     use ethabi::Token;
     use frame_support::dispatch::RawOrigin;
     use frame_support::pallet_prelude::*;
-    use frame_support::traits::{IsSubType, UnfilteredDispatchable};
+    use frame_support::traits::IsSubType;
     use frame_system::pallet_prelude::*;
     use sp_core::{keccak_256, H160, H256, U256};
     use sp_runtime::traits::{AccountIdConversion, Dispatchable};
     use sp_runtime::ArithmeticError;
+    use traits::ApprovedCallForwarder;
+    use xcm::latest::{Junctions, MultiLocation};
 
     use super::*;
 
@@ -88,13 +90,15 @@ pub mod pallet {
             + Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
             + GetDispatchInfo
             + From<frame_system::Call<Self>>
-            + UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
             + IsSubType<Call<Self>>
             + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
         /// Self chain Identifier
         #[pallet::constant]
         type ChainId: Get<u32>;
+
+        /// The forwarder for approved calls
+        type ApprovedCallForwarder: ApprovedCallForwarder<Self::AccountId, Self>;
 
         /// Weight information for extrinsics in this pallet
         type WeightInfo: WeightInfo;
@@ -210,6 +214,8 @@ pub mod pallet {
         TooManyCalls,
         CommandIdsLengthMismatch,
         WrongChainId,
+        ContractCallNotApproved,
+        ErrorForwarding,
     }
 
     // ------------------------------------------------------------------------
@@ -398,9 +404,57 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::execute_approved_call())]
-        pub fn execute_approved_call(origin: OriginFor<T>) -> DispatchResult {
+        #[pallet::weight({
+            let total_weight = <T as pallet::Config>::WeightInfo::forward_approved_call();
+            if <T as pallet::Config>::ApprovedCallForwarder::is_local() {
+                let cc = <T as Config>::RuntimeCall::decode(&mut &call[..]).unwrap();
+                total_weight.saturating_add(cc.get_dispatch_info().weight);
+            }
+            total_weight
+        })]
+        pub fn forward_approved_call(
+            origin: OriginFor<T>,
+            command_id: H256,
+            source_chain: String,
+            source_address: String,
+            contract_address: H160,
+            call: Vec<u8>,
+        ) -> DispatchResult {
             let _ = ensure_signed(origin)?;
+
+            // TODO: keccak_256 is the Axelar Gateway standard hashing at origin on EVM chains, check if it is consistent in every contractCall on every chain
+            let call_hash = H256::from_slice(&ecdsa::to_eth_signed_message_hash(keccak_256(
+                call.as_slice(),
+            )));
+            // TODO: Does it need to be ABI encoded?
+            let mut approved_call = command_id.encode();
+            approved_call.append(&mut source_chain.encode());
+            approved_call.append(&mut source_address.encode());
+            approved_call.append(&mut contract_address.encode());
+            approved_call.append(&mut call_hash.encode());
+
+            let approved_call_hash = H256::from(keccak_256(approved_call.as_slice()));
+
+            // Ensure the call has been approved by the bridge beforehand
+            ensure!(
+                <ContractCallApproved<T>>::contains_key(approved_call_hash),
+                Error::<T>::ContractCallNotApproved
+            );
+
+            <ContractCallApproved<T>>::remove(approved_call_hash);
+
+            T::ApprovedCallForwarder::do_forward(
+                Self::account_id(),
+                source_chain,
+                source_address,
+                contract_address,
+                // TODO: dummy location
+                MultiLocation {
+                    parents: 0,
+                    interior: Junctions::Here,
+                },
+                call,
+            )?;
 
             Ok(())
         }

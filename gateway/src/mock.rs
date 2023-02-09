@@ -6,6 +6,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
 
+use crate::traits::ApprovedCallLocalForwarder;
 use crate::{self as pallet_axelar_cgp, Config};
 
 pub type AccountId = u64;
@@ -48,6 +49,7 @@ impl Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type RuntimeCall = RuntimeCall;
     type ChainId = ChainId;
+    type ApprovedCallForwarder = ApprovedCallLocalForwarder;
     type WeightInfo = ();
 }
 
