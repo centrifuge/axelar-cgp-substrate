@@ -57,21 +57,21 @@ impl WeightInfo for () {
     }
 }
 
-pub trait ApprovedCallForwarder<AccountId, T> {
+pub trait CallForwarder<AccountId, T> {
     fn is_local() -> bool;
     fn do_forward(
         who: AccountId,
         source_chain: String,
         source_address: String,
         contract_address: H160,
-        dest: MultiLocation,
+        dest: u32,
         call: Vec<u8>,
     ) -> DispatchResult;
 }
 
 /// Local Forwarder Default Implementation
-pub struct ApprovedCallLocalForwarder;
-impl<T: Config> ApprovedCallForwarder<T::AccountId, T> for ApprovedCallLocalForwarder {
+pub struct LocalCallForwarder;
+impl<T: Config> CallForwarder<T::AccountId, T> for LocalCallForwarder {
     fn is_local() -> bool {
         true
     }
@@ -81,7 +81,7 @@ impl<T: Config> ApprovedCallForwarder<T::AccountId, T> for ApprovedCallLocalForw
         _source_chain: String,
         _source_address: String,
         _contract_address: H160,
-        _dest: MultiLocation,
+        _dest: u32,
         call: Vec<u8>,
     ) -> DispatchResult {
         match <T as Config>::RuntimeCall::decode(&mut &call[..]) {
@@ -98,9 +98,9 @@ impl<T: Config> ApprovedCallForwarder<T::AccountId, T> for ApprovedCallLocalForw
 }
 
 /// XCM Forwarder Implementation
-pub struct ApprovedCallRemoteForwarder<XcmSender>(PhantomData<XcmSender>);
-impl<T: Config, XcmSender: SendXcm> ApprovedCallForwarder<T::AccountId, T>
-    for ApprovedCallRemoteForwarder<XcmSender>
+pub struct RemoteCallForwarder<XcmSender>(PhantomData<XcmSender>);
+impl<T: Config, XcmSender: SendXcm> CallForwarder<T::AccountId, T>
+    for RemoteCallForwarder<XcmSender>
 {
     fn is_local() -> bool {
         false
@@ -111,13 +111,14 @@ impl<T: Config, XcmSender: SendXcm> ApprovedCallForwarder<T::AccountId, T>
         source_chain: String,
         source_address: String,
         _contract_address: H160,
-        dest: MultiLocation,
+        dest: u32,
         call: Vec<u8>,
     ) -> DispatchResult {
         // let function_prefx = [0,1]; // configurable per sovereign chain
         // let call_arguments = _source_chain.append(_source_address.encode().append(_call));
 
         // TODO: xcm v2 - review
+        // Named conversion can fail if source_chain is longer than 32b, revisit this
         let eth_junction = Junction::AccountKey20 {
             network: NetworkId::Named(
                 source_chain
@@ -155,7 +156,12 @@ impl<T: Config, XcmSender: SendXcm> ApprovedCallForwarder<T::AccountId, T>
             },
         ]);
 
-        XcmSender::send_xcm(dest, transact_message).map_err(|_| ErrorForwarding::<T>)?;
+        let dest_multi = MultiLocation {
+            parents: 1,
+            interior: X1(Parachain(dest)),
+        };
+
+        XcmSender::send_xcm(dest_multi, transact_message).map_err(|_| ErrorForwarding::<T>)?;
 
         Ok(())
     }

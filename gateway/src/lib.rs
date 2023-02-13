@@ -53,8 +53,7 @@ pub mod pallet {
     use sp_core::{keccak_256, H160, H256, U256};
     use sp_runtime::traits::{AccountIdConversion, Dispatchable};
     use sp_runtime::ArithmeticError;
-    use traits::ApprovedCallForwarder;
-    use xcm::latest::{Junctions, MultiLocation};
+    use traits::CallForwarder;
 
     use super::*;
 
@@ -98,7 +97,7 @@ pub mod pallet {
         type ChainId: Get<u32>;
 
         /// The forwarder for approved calls
-        type ApprovedCallForwarder: ApprovedCallForwarder<Self::AccountId, Self>;
+        type ApprovedCallForwarder: CallForwarder<Self::AccountId, Self>;
 
         /// Weight information for extrinsics in this pallet
         type WeightInfo: WeightInfo;
@@ -139,7 +138,7 @@ pub mod pallet {
     // Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
     // the `size_of` of the `Call` can be different. To ensure that this don't leads to
     // mismatches between native/wasm or to different metadata for the same runtime, we
-    // algin the call size. The value is chosen big enough to hopefully never reach it.
+    // align the call size. The value is chosen big enough to hopefully never reach it.
     const CALL_ALIGN: u32 = 1024;
 
     // ------------------------------------------------------------------------
@@ -181,8 +180,8 @@ pub mod pallet {
         Blake2_128Concat,
         // Command Id
         H256,
-        // Empty
-        (),
+        // Destination Parachain Id
+        u32,
         ValueQuery,
     >;
 
@@ -293,7 +292,7 @@ pub mod pallet {
             // Track failed dispatch occur.
             let mut has_error = false;
             for (idx, call) in calls.into_iter().enumerate() {
-                if <CommandExecuted<T>>::contains_key(command_ids[idx]) {
+                if CommandExecuted::<T>::contains_key(command_ids[idx]) {
                     continue;
                 }
 
@@ -309,14 +308,14 @@ pub mod pallet {
                 }
 
                 let info = call.get_dispatch_info();
-                <CommandExecuted<T>>::set(command_ids[idx], ());
+                CommandExecuted::<T>::set(command_ids[idx], chain_id);
 
                 let result = call.dispatch(gateway_origin.clone().into());
                 // Add the weight of this call.
                 weight = weight.saturating_add(extract_actual_weight(&result, &info));
                 if let Err(e) = result {
                     has_error = true;
-                    <CommandExecuted<T>>::remove(command_ids[idx]);
+                    CommandExecuted::<T>::remove(command_ids[idx]);
                     Self::deposit_event(Event::ItemFailed {
                         index: idx as u32,
                         error: e.error,
@@ -350,16 +349,16 @@ pub mod pallet {
                 Self::validate_operatorship(new_operators, new_weights, new_threshold)?;
 
             ensure!(
-                !<EpochForHash<T>>::contains_key(new_operator_hash),
+                !EpochForHash::<T>::contains_key(new_operator_hash),
                 Error::<T>::DuplicateOperators
             );
 
-            let epoch = <CurrentEpoch<T>>::get()
+            let epoch = CurrentEpoch::<T>::get()
                 .checked_add(1)
                 .ok_or(ArithmeticError::Overflow)?;
-            <CurrentEpoch<T>>::set(epoch);
-            <HashForEpoch<T>>::set(epoch, new_operator_hash);
-            <EpochForHash<T>>::set(new_operator_hash, epoch);
+            CurrentEpoch::<T>::set(epoch);
+            HashForEpoch::<T>::set(epoch, new_operator_hash);
+            EpochForHash::<T>::set(new_operator_hash, epoch);
 
             Self::deposit_event(Event::OperatorshipTransferred {
                 new_operator_hash,
@@ -389,7 +388,7 @@ pub mod pallet {
             payload.append(&mut contract_address.encode());
             payload.append(&mut payload_hash.encode());
 
-            <ContractCallApproved<T>>::set(H256::from(keccak_256(payload.as_slice())), ());
+            ContractCallApproved::<T>::set(H256::from(keccak_256(payload.as_slice())), ());
 
             Self::deposit_event(Event::ContractCallApproved {
                 command_id,
@@ -437,22 +436,21 @@ pub mod pallet {
 
             // Ensure the call has been approved by the bridge beforehand
             ensure!(
-                <ContractCallApproved<T>>::contains_key(approved_call_hash),
+                ContractCallApproved::<T>::contains_key(approved_call_hash),
                 Error::<T>::ContractCallNotApproved
             );
 
-            <ContractCallApproved<T>>::remove(approved_call_hash);
+            ContractCallApproved::<T>::remove(approved_call_hash);
+
+            // Fetch Parachain Id previously stored when executing command
+            let dest = CommandExecuted::<T>::get(command_id);
 
             T::ApprovedCallForwarder::do_forward(
                 Self::account_id(),
                 source_chain,
                 source_address,
                 contract_address,
-                // TODO: dummy location
-                MultiLocation {
-                    parents: 0,
-                    interior: Junctions::Here,
-                },
+                dest,
                 call,
             )?;
 
