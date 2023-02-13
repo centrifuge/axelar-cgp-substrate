@@ -63,7 +63,7 @@ construct_runtime!(
         UncheckedExtrinsic = UncheckedExtrinsic,
     {
         System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-        AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Event<T>} = 3,
+        AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Event<T>} = 2,
     }
 );
 
