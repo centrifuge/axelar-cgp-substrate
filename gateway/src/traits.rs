@@ -7,7 +7,7 @@
 use frame_support::PalletId;
 use std::marker::PhantomData;
 // Frame, system and frame primitives
-use crate::Config;
+use crate::{Config, pallet};
 use crate::Error::ErrorForwarding;
 use codec::Decode;
 use frame_support::dispatch::{DispatchResult, RawOrigin};
@@ -21,8 +21,6 @@ use xcm::prelude::DescendOrigin;
 // ----------------------------------------------------------------------------
 // Traits declaration
 // ----------------------------------------------------------------------------
-
-pub const GATEWAY_PALLET_ID: PalletId = PalletId(*b"axgteway");
 
 /// Weight information for pallet extrinsics
 ///
@@ -57,10 +55,10 @@ impl WeightInfo for () {
     }
 }
 
-pub trait CallForwarder<AccountId, T> {
+pub trait CallForwarder<T: pallet::Config> {
     fn is_local() -> bool;
     fn do_forward(
-        who: AccountId,
+        origin: <T as pallet::Config>::RuntimeOrigin,
         source_chain: String,
         source_address: String,
         contract_address: H160,
@@ -71,13 +69,13 @@ pub trait CallForwarder<AccountId, T> {
 
 /// Local Forwarder Default Implementation
 pub struct LocalCallForwarder;
-impl<T: Config> CallForwarder<T::AccountId, T> for LocalCallForwarder {
+impl<T: Config> CallForwarder<T> for LocalCallForwarder {
     fn is_local() -> bool {
         true
     }
 
     fn do_forward(
-        who: T::AccountId,
+        origin: <T as pallet::Config>::RuntimeOrigin,
         _source_chain: String,
         _source_address: String,
         _contract_address: H160,
@@ -87,7 +85,7 @@ impl<T: Config> CallForwarder<T::AccountId, T> for LocalCallForwarder {
         match <T as Config>::RuntimeCall::decode(&mut &call[..]) {
             Ok(final_call) => {
                 final_call
-                    .dispatch(RawOrigin::Signed(who).into())
+                    .dispatch(origin)
                     .map(|_| ())
                     .map_err(|e| e.error)?;
                 Ok(())
@@ -99,7 +97,7 @@ impl<T: Config> CallForwarder<T::AccountId, T> for LocalCallForwarder {
 
 /// XCM Forwarder Implementation
 pub struct RemoteCallForwarder<XcmSender>(PhantomData<XcmSender>);
-impl<T: Config, XcmSender: SendXcm> CallForwarder<T::AccountId, T>
+impl<T: Config, XcmSender: SendXcm> CallForwarder<T>
     for RemoteCallForwarder<XcmSender>
 {
     fn is_local() -> bool {
@@ -107,7 +105,7 @@ impl<T: Config, XcmSender: SendXcm> CallForwarder<T::AccountId, T>
     }
 
     fn do_forward(
-        _who: T::AccountId,
+        _origin: <T as pallet::Config>::RuntimeOrigin,
         source_chain: String,
         source_address: String,
         _contract_address: H160,

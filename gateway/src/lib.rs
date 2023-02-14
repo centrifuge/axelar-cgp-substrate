@@ -12,13 +12,17 @@
 // Pallet traits declaration
 pub mod traits;
 
+use std::marker::PhantomData;
 // Re-export pallet components in crate namespace (for runtime construction)
 use crate::traits::WeightInfo;
 use frame_support::dispatch::{
-    extract_actual_weight, GetDispatchInfo, PostDispatchInfo, RawOrigin,
+    extract_actual_weight, GetDispatchInfo, PostDispatchInfo,
 };
 use frame_support::traits::EnsureOrigin;
 use frame_support::PalletId;
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+use sp_core::RuntimeDebug;
 pub use pallet::*;
 
 #[cfg(test)]
@@ -33,6 +37,12 @@ pub mod proof;
 // ----------------------------------------------------------------------------
 pub const OLD_KEY_RETENTION: u64 = 16;
 
+
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum RawOrigin {
+    Bridge,
+}
+
 // ----------------------------------------------------------------------------
 // Pallet module
 // ----------------------------------------------------------------------------
@@ -46,7 +56,6 @@ pub const OLD_KEY_RETENTION: u64 = 16;
 pub mod pallet {
     use crate::proof::operators_hash;
     use ethabi::Token;
-    use frame_support::dispatch::RawOrigin;
     use frame_support::pallet_prelude::*;
     use frame_support::traits::IsSubType;
     use frame_system::pallet_prelude::*;
@@ -77,16 +86,15 @@ pub mod pallet {
     /// Note that [`frame_system::Config`] must always be included.
     #[pallet::config]
     pub trait Config: frame_system::Config {
-        /// The Gateway Origin Pallet Identifier
-        #[pallet::constant]
-        type PalletId: Get<PalletId>;
-
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+        /// The overarching origin type.
+        type RuntimeOrigin: From<RawOrigin>;
+
         /// The overarching call type.
         type RuntimeCall: Parameter
-            + Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
+            + Dispatchable<RuntimeOrigin = <Self as pallet::Config>::RuntimeOrigin, PostInfo = PostDispatchInfo>
             + GetDispatchInfo
             + From<frame_system::Call<Self>>
             + IsSubType<Call<Self>>
@@ -97,7 +105,7 @@ pub mod pallet {
         type ChainId: Get<u32>;
 
         /// The forwarder for approved calls
-        type ApprovedCallForwarder: CallForwarder<Self::AccountId, Self>;
+        type ApprovedCallForwarder: CallForwarder<Self>;
 
         /// Weight information for extrinsics in this pallet
         type WeightInfo: WeightInfo;
@@ -133,6 +141,9 @@ pub mod pallet {
             error: DispatchError,
         },
     }
+
+    #[pallet::origin]
+    pub type Origin = RawOrigin;
 
     // Code block taken from: https://github.com/paritytech/substrate/blob/ee316317b85b2f65fc022b27bbfefcd42b6560ae/frame/utility/src/lib.rs#L128
     // Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
@@ -279,7 +290,6 @@ pub mod pallet {
             )));
             let mut is_active_operators = Self::validate_proof(payload_hash, &proof)?;
 
-            let gateway_origin = RawOrigin::Signed(Self::account_id());
             // Code simplified taken from https://github.com/paritytech/substrate/blob/ee316317b85b2f65fc022b27bbfefcd42b6560ae/frame/utility/src/lib.rs#L440
             let calls_len = calls.len();
             ensure!(
@@ -310,7 +320,7 @@ pub mod pallet {
                 let info = call.get_dispatch_info();
                 CommandExecuted::<T>::set(command_ids[idx], chain_id);
 
-                let result = call.dispatch(gateway_origin.clone().into());
+                let result = call.dispatch(RawOrigin::Bridge.into());
                 // Add the weight of this call.
                 weight = weight.saturating_add(extract_actual_weight(&result, &info));
                 if let Err(e) = result {
@@ -343,7 +353,7 @@ pub mod pallet {
             new_threshold: u128,
         ) -> DispatchResult {
             // Ensure only gateway origin can call this
-            let _ = EnsureGateway::<T>::ensure_origin(origin)?;
+            let _ = EnsureGateway::<T>::ensure_origin(origin.into())?;
 
             let new_operator_hash =
                 Self::validate_operatorship(new_operators, new_weights, new_threshold)?;
@@ -446,7 +456,7 @@ pub mod pallet {
             let dest = CommandExecuted::<T>::get(command_id);
 
             T::ApprovedCallForwarder::do_forward(
-                Self::account_id(),
+                RawOrigin::Bridge.into(),
                 source_chain,
                 source_address,
                 contract_address,
@@ -470,10 +480,6 @@ pub mod pallet {
             let margin_factor = 3;
 
             allocator_limit / margin_factor / call_size
-        }
-
-        pub fn account_id() -> T::AccountId {
-            T::PalletId::get().into_account_truncating()
         }
 
         pub fn validate_operatorship(
@@ -593,20 +599,38 @@ pub mod pallet {
 }
 // end of 'pallet' module
 
-pub struct EnsureGateway<T>(sp_std::marker::PhantomData<T>);
-impl<T: pallet::Config> EnsureOrigin<T::RuntimeOrigin> for EnsureGateway<T> {
-    type Success = T::AccountId;
+pub struct EnsureGateway<T>(PhantomData<T>);
+impl<T: pallet::Config> EnsureOrigin<<T as pallet::Config>::RuntimeOrigin> for EnsureGateway<T> {
+    type Success = ();
 
-    fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-        let gateway_id = Pallet::<T>::account_id();
+    fn try_origin(o: <T as pallet::Config>::RuntimeOrigin) -> Result<Self::Success, <T as pallet::Config>::RuntimeOrigin> {
         o.into().and_then(|o| match o {
-            RawOrigin::Signed(who) if who == gateway_id => Ok(gateway_id),
-            r => Err(T::RuntimeOrigin::from(r)),
+            RawOrigin::Bridge => Ok(()),
+            r => Err(<T as pallet::Config>::RuntimeOrigin::from(r)),
         })
     }
 
     #[cfg(feature = "runtime-benchmarks")]
-    fn successful_origin() -> T::RuntimeOrigin {
+    fn successful_origin() -> <T as pallet::Config>::RuntimeOrigin {
         unimplemented!()
     }
 }
+
+// pub struct EnsureGateway;
+// impl<
+//     O: Into<Result<RawOrigin, O>> + From<RawOrigin>,
+// > EnsureOrigin<O> for EnsureGateway
+// {
+//     type Success = ();
+//     fn try_origin(o: O) -> Result<Self::Success, O> {
+//         o.into().and_then(|o| match o {
+//             RawOrigin::Bridge => Ok(()),
+//             r => Err(O::from(r)),
+//         })
+//     }
+//
+//     #[cfg(feature = "runtime-benchmarks")]
+//     fn successful_origin() -> Result<O, ()> {
+//         unimplemented!()
+//     }
+// }

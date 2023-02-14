@@ -40,13 +40,12 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
-    pub const GatewayPalletId: PalletId = crate::traits::GATEWAY_PALLET_ID;
     pub const ChainId: u16 = 36;
 }
 
 impl Config for Runtime {
-    type PalletId = GatewayPalletId;
     type RuntimeEvent = RuntimeEvent;
+    type RuntimeOrigin = RuntimeOrigin;
     type RuntimeCall = RuntimeCall;
     type ChainId = ChainId;
     type ApprovedCallForwarder = LocalCallForwarder;

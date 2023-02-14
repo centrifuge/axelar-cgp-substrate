@@ -84,11 +84,10 @@ fn transfer_operatorship() {
             BadOrigin,
         );
 
-        let gw_account_id = AxelarGateway::account_id();
         // new_operators vector is empty
         assert_noop!(
             AxelarGateway::transfer_operatorship(
-                RuntimeOrigin::signed(gw_account_id),
+                RawOrigin::Bridge.into(),
                 vec![],
                 vec![],
                 0u128
@@ -108,7 +107,7 @@ fn transfer_operatorship() {
         EpochForHash::<Runtime>::insert(precomputed_hash, new_epoch);
         assert_noop!(
             AxelarGateway::transfer_operatorship(
-                RuntimeOrigin::signed(gw_account_id),
+                RawOrigin::Bridge.into(),
                 new_operators.clone(),
                 new_weights.clone(),
                 20u128
@@ -119,7 +118,7 @@ fn transfer_operatorship() {
         // Remove hash
         EpochForHash::<Runtime>::remove(precomputed_hash);
         assert_ok!(AxelarGateway::transfer_operatorship(
-            RuntimeOrigin::signed(gw_account_id),
+            RawOrigin::Bridge.into(),
             new_operators.clone(),
             new_weights.clone(),
             20u128
@@ -170,9 +169,8 @@ fn approve_contract_call() {
             BadOrigin,
         );
 
-        let gw_account_id = AxelarGateway::account_id();
         assert_ok!(AxelarGateway::approve_contract_call(
-            RuntimeOrigin::signed(gw_account_id),
+            RawOrigin::Bridge.into(),
             source_chain.clone(),
             source_address.clone(),
             contract_address,
