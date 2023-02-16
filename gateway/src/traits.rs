@@ -4,13 +4,12 @@
 // Module imports and re-exports
 // ----------------------------------------------------------------------------
 
-use frame_support::PalletId;
 use std::marker::PhantomData;
 // Frame, system and frame primitives
-use crate::{Config, pallet};
 use crate::Error::ErrorForwarding;
+use crate::{pallet, Config};
 use codec::Decode;
-use frame_support::dispatch::{DispatchResult, RawOrigin};
+use frame_support::dispatch::DispatchResult;
 use frame_support::weights::Weight;
 use frame_system::pallet_prelude::OriginFor;
 use sp_core::H160;
@@ -59,7 +58,7 @@ impl WeightInfo for () {
 pub trait CallForwarder<T: pallet::Config> {
     fn is_local() -> bool;
     fn do_forward(
-        origin: <T as pallet::Config>::RuntimeOrigin,
+        origin: OriginFor<T>,
         source_chain: String,
         source_address: String,
         contract_address: H160,
@@ -76,7 +75,7 @@ impl<T: Config> CallForwarder<T> for LocalCallForwarder {
     }
 
     fn do_forward(
-        origin: <T as pallet::Config>::RuntimeOrigin,
+        origin: OriginFor<T>,
         _source_chain: String,
         _source_address: String,
         _contract_address: H160,
@@ -98,15 +97,13 @@ impl<T: Config> CallForwarder<T> for LocalCallForwarder {
 
 /// XCM Forwarder Implementation
 pub struct RemoteCallForwarder<XcmSender>(PhantomData<XcmSender>);
-impl<T: Config, XcmSender: SendXcm> CallForwarder<T>
-    for RemoteCallForwarder<XcmSender>
-{
+impl<T: Config, XcmSender: SendXcm> CallForwarder<T> for RemoteCallForwarder<XcmSender> {
     fn is_local() -> bool {
         false
     }
 
     fn do_forward(
-        _origin: <T as pallet::Config>::RuntimeOrigin,
+        _origin: OriginFor<T>,
         source_chain: String,
         source_address: String,
         _contract_address: H160,

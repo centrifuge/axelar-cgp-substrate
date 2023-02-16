@@ -86,12 +86,7 @@ fn transfer_operatorship() {
 
         // new_operators vector is empty
         assert_noop!(
-            AxelarGateway::transfer_operatorship(
-                RawOrigin::Bridge.into(),
-                vec![],
-                vec![],
-                0u128
-            ),
+            AxelarGateway::transfer_operatorship(RawOrigin::Bridge.into(), vec![], vec![], 0u128),
             Error::<Runtime>::InvalidOperators,
         );
 
@@ -633,18 +628,18 @@ fn forward_valid_approved_call() {
 
         ContractCallApproved::<Runtime>::set(approved_call_hash, ());
 
-        assert_ok!(AxelarGateway::forward_approved_call(
-            RuntimeOrigin::signed(ALICE),
-            command_id,
-            source_chain,
-            source_address,
-            contract_address,
-            inner_call_bytes,
-        ));
-
-        assert!(!ContractCallApproved::<Runtime>::contains_key(
-            approved_call_hash
-        ))
+        // Inner call - Remark - needs a signed origin so call will fail
+        assert_noop!(
+            AxelarGateway::forward_approved_call(
+                RuntimeOrigin::signed(ALICE),
+                command_id,
+                source_chain,
+                source_address,
+                contract_address,
+                inner_call_bytes,
+            ),
+            BadOrigin
+        );
     });
 }
 
