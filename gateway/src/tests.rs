@@ -683,3 +683,29 @@ fn forward_invalid_approved_call() {
         assert!(ContractCallApproved::<Runtime>::contains_key(approved_call_hash))
     });
 }
+
+#[test]
+fn contract_call_event_emitted() {
+    ExtBuilder::default().build().execute_with(|| {
+        // Dummy values
+        let destination_chain: String = "ethereum".to_string();
+        let destination_contract_address: String =
+            "0x5f927395213ee6b95de97bddcb1b2b1c0f16844d".to_string();
+        let payload: Vec<u8> = [0; 32].encode();
+
+        assert_ok!(AxelarGateway::call_contract(
+            RuntimeOrigin::signed(ALICE),
+            destination_chain.clone(),
+            destination_contract_address.clone(),
+            payload.clone()
+        ));
+
+        event_exists(Event::<Runtime>::ContractCall {
+            sender: ALICE,
+            destination_chain,
+            destination_contract_address,
+            payload_hash: H256::from(keccak_256(payload.as_slice())),
+            payload,
+        });
+    });
+}

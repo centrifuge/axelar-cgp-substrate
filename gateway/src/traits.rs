@@ -31,6 +31,7 @@ pub trait WeightInfo {
     fn transfer_operatorship(c: u32) -> Weight;
     fn approve_contract_call() -> Weight;
     fn forward_approved_call() -> Weight;
+    fn call_contract() -> Weight;
 }
 
 // For backwards compatibility and tests
@@ -51,6 +52,9 @@ impl WeightInfo for () {
         Weight::from_ref_time(17_443_346 as u64)
     }
     fn forward_approved_call() -> Weight {
+        Weight::from_ref_time(17_443_346 as u64)
+    }
+    fn call_contract() -> Weight {
         Weight::from_ref_time(17_443_346 as u64)
     }
 }

@@ -151,6 +151,13 @@ pub mod pallet {
             index: u32,
             error: DispatchError,
         },
+        ContractCall {
+            sender: T::AccountId,
+            destination_chain: String,
+            destination_contract_address: String,
+            payload_hash: H256,
+            payload: Vec<u8>,
+        },
     }
 
     #[pallet::origin]
@@ -245,6 +252,26 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::call_contract())]
+        pub fn call_contract(
+            origin: OriginFor<T>,
+            destination_chain: String,
+            destination_contract_address: String,
+            payload: Vec<u8>,
+        ) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+
+            Self::deposit_event(Event::ContractCall {
+                sender: who,
+                destination_chain,
+                destination_contract_address,
+                payload_hash: H256::from_slice(keccak_256(&payload).as_slice()),
+                payload,
+            });
+
+            Ok(())
+        }
+
         /// Executes a batch of calls previously approved by the Axelar Consensus
         ///
         /// command_ids: ordered list of uuid that identify each command within the batch
