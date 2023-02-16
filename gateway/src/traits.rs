@@ -12,6 +12,7 @@ use crate::Error::ErrorForwarding;
 use codec::Decode;
 use frame_support::dispatch::{DispatchResult, RawOrigin};
 use frame_support::weights::Weight;
+use frame_system::pallet_prelude::OriginFor;
 use sp_core::H160;
 use sp_runtime::{traits::Dispatchable, DispatchError};
 use xcm::latest::prelude::*;
