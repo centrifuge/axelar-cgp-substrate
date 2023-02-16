@@ -92,12 +92,28 @@ pub mod pallet {
     /// depends on other super-traits, the latter must be added to this trait,
     /// Note that [`frame_system::Config`] must always be included.
     #[pallet::config]
-    pub trait Config: frame_system::Config {
+    pub trait Config:
+    // Assert our origins are the same so we can bound them. This is a workaround for associated type bounds being unstable - See RFC 2289.
+    // Ideally this would be:
+    //    frame_system::Config<RuntimeOrigin: From<RawOrigin> + Into<Result<RawOrigin, <Self as frame_system::Config>::RuntimeOrigin>>>
+    // Then we wouldn't need our own RuntimeOrigin type at all to handle adding bounds.
+    frame_system::Config<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+    {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// The overarching origin type.
-        type RuntimeOrigin: From<RawOrigin>;
+        // The `frame_system::RawOrigin` related bounds are needed because the compiler isn't smart enough to infer
+        // that the `frame_system::Config::RawOrigin` are implied by our type-equality above. More may be needed to
+        // make everything work, but the one here gets `ensure_signed` to behave.
+        type RuntimeOrigin: From<RawOrigin>
+            + Into<Result<RawOrigin, <Self as Config>::RuntimeOrigin>>
+            + Into<
+                Result<
+                    frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>,
+                    <Self as Config>::RuntimeOrigin,
+                >,
+            >;
 
         /// The overarching call type.
         type RuntimeCall: Parameter
