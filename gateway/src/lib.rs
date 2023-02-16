@@ -21,6 +21,7 @@ use frame_support::dispatch::{
 use frame_support::traits::EnsureOrigin;
 use frame_support::PalletId;
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_system::pallet_prelude::OriginFor;
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
 pub use pallet::*;
@@ -42,6 +43,12 @@ pub const OLD_KEY_RETENTION: u64 = 16;
 pub enum RawOrigin {
     Bridge,
 }
+
+// impl<T: pallet::Config> Into<T::RuntimeOrigin> for RawOrigin<T> {
+//     fn into(self) -> T::RuntimeOrigin {
+//         self as T::RuntimeOrigin
+//     }
+// }
 
 // ----------------------------------------------------------------------------
 // Pallet module
@@ -94,7 +101,7 @@ pub mod pallet {
 
         /// The overarching call type.
         type RuntimeCall: Parameter
-            + Dispatchable<RuntimeOrigin = <Self as pallet::Config>::RuntimeOrigin, PostInfo = PostDispatchInfo>
+            + Dispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin, PostInfo = PostDispatchInfo>
             + GetDispatchInfo
             + From<frame_system::Call<Self>>
             + IsSubType<Call<Self>>
@@ -320,6 +327,7 @@ pub mod pallet {
                 let info = call.get_dispatch_info();
                 CommandExecuted::<T>::set(command_ids[idx], chain_id);
 
+                // let result = call.dispatch(convert_outer_origin::<OriginFor<T>>(RawOrigin::Bridge));
                 let result = call.dispatch(RawOrigin::Bridge.into());
                 // Add the weight of this call.
                 weight = weight.saturating_add(extract_actual_weight(&result, &info));
@@ -353,7 +361,7 @@ pub mod pallet {
             new_threshold: u128,
         ) -> DispatchResult {
             // Ensure only gateway origin can call this
-            let _ = EnsureGateway::<T>::ensure_origin(origin.into())?;
+            // let _ = EnsureGateway::ensure_origin(origin)?;
 
             let new_operator_hash =
                 Self::validate_operatorship(new_operators, new_weights, new_threshold)?;
@@ -390,7 +398,8 @@ pub mod pallet {
             command_id: H256,
         ) -> DispatchResult {
             // Ensure only gateway origin can call this
-            let _ = EnsureGateway::<T>::ensure_origin(origin)?;
+            // let _ = EnsureGateway::ensure_origin(origin)?;
+            let _ = EnsureGateway::ensure_origin(origin)?;
 
             let mut payload = command_id.encode();
             payload.append(&mut source_chain.encode());
@@ -599,38 +608,54 @@ pub mod pallet {
 }
 // end of 'pallet' module
 
-pub struct EnsureGateway<T>(PhantomData<T>);
-impl<T: pallet::Config> EnsureOrigin<<T as pallet::Config>::RuntimeOrigin> for EnsureGateway<T> {
-    type Success = ();
-
-    fn try_origin(o: <T as pallet::Config>::RuntimeOrigin) -> Result<Self::Success, <T as pallet::Config>::RuntimeOrigin> {
-        o.into().and_then(|o| match o {
-            RawOrigin::Bridge => Ok(()),
-            r => Err(<T as pallet::Config>::RuntimeOrigin::from(r)),
-        })
-    }
-
-    #[cfg(feature = "runtime-benchmarks")]
-    fn successful_origin() -> <T as pallet::Config>::RuntimeOrigin {
-        unimplemented!()
-    }
-}
-
-// pub struct EnsureGateway;
-// impl<
-//     O: Into<Result<RawOrigin, O>> + From<RawOrigin>,
-// > EnsureOrigin<O> for EnsureGateway
-// {
+// pub struct EnsureGateway<T>(PhantomData<T>);
+// impl<T: pallet::Config> EnsureOrigin<OriginFor<T>> for EnsureGateway<T> {
 //     type Success = ();
-//     fn try_origin(o: O) -> Result<Self::Success, O> {
+//
+//     fn try_origin(o: <T as pallet::Config>::RuntimeOrigin) -> Result<Self::Success, <T as pallet::Config>::RuntimeOrigin> {
 //         o.into().and_then(|o| match o {
 //             RawOrigin::Bridge => Ok(()),
-//             r => Err(O::from(r)),
+//             r => Err(<T as pallet::Config>::RuntimeOrigin::from(r)),
 //         })
 //     }
 //
 //     #[cfg(feature = "runtime-benchmarks")]
-//     fn successful_origin() -> Result<O, ()> {
+//     fn successful_origin() -> <T as pallet::Config>::RuntimeOrigin {
 //         unimplemented!()
+//     }
+// }
+
+pub fn convert_outer_origin<O>(raw: RawOrigin) -> O
+where O: From<RawOrigin>
+{
+    raw.into()
+}
+
+pub struct EnsureGateway;
+impl<
+    O: Into<Result<RawOrigin, O>> + From<RawOrigin>,
+> EnsureOrigin<O> for EnsureGateway
+{
+    type Success = ();
+    fn try_origin(o: O) -> Result<Self::Success, O> {
+        o.into().and_then(|o| match o {
+            RawOrigin::Bridge => Ok(()),
+            r => Err(O::from(r)),
+        })
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn successful_origin() -> Result<O, ()> {
+        unimplemented!()
+    }
+}
+
+// pub fn ensure_bridge_origin<OuterOrigin>(o: OuterOrigin) -> Result<(), &'static str>
+//     where
+//         OuterOrigin: Into<Result<RawOrigin, OuterOrigin>>,
+// {
+//     match o.into() {
+//         Ok(RawOrigin::Bridge) => Ok(()),
+//         _ => Err("wrong origin"),
 //     }
 // }

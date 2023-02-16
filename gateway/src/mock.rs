@@ -45,7 +45,6 @@ parameter_types! {
 
 impl Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type RuntimeOrigin = RuntimeOrigin;
     type RuntimeCall = RuntimeCall;
     type ChainId = ChainId;
     type ApprovedCallForwarder = LocalCallForwarder;
