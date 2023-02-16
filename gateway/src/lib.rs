@@ -259,6 +259,10 @@ pub mod pallet {
             destination_contract_address: String,
             payload: Vec<u8>,
         ) -> DispatchResult {
+            //TODO: It is important that the sender is identified and propagated so
+            // destination chains contracts can apply any authorization needed
+            // the sender might become a Multilocation once we implement XCM &&
+            // ensure_signed might not make sense
             let who = ensure_signed(origin)?;
 
             Self::deposit_event(Event::ContractCall {
