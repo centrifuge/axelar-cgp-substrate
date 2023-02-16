@@ -11,6 +11,8 @@ edition = "2021"
 
 [dependencies]
 eth-encode-packed = "0.1.0"
+libsecp256k1 = "0.7"
+rand = "0.8.5"
 
 # Substrate
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.33" }

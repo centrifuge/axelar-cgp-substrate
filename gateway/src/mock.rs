@@ -1,13 +1,15 @@
 use frame_support::{
-    construct_runtime,
+    construct_runtime, parameter_types,
     traits::{ConstU32, ConstU64, Everything},
+    PalletId,
 };
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
 
+use crate::traits::LocalCallForwarder;
 use crate::{self as pallet_axelar_cgp, Config};
 
-pub type AccountId = u128;
+pub type AccountId = u64;
 pub type BlockNumber = u64;
 
 impl frame_system::Config for Runtime {
@@ -37,8 +39,17 @@ impl frame_system::Config for Runtime {
     type MaxConsumers = ConstU32<16>;
 }
 
+parameter_types! {
+    pub const GatewayPalletId: PalletId = crate::traits::GATEWAY_PALLET_ID;
+    pub const ChainId: u16 = 36;
+}
+
 impl Config for Runtime {
+    type PalletId = GatewayPalletId;
     type RuntimeEvent = RuntimeEvent;
+    type RuntimeCall = RuntimeCall;
+    type ChainId = ChainId;
+    type ApprovedCallForwarder = LocalCallForwarder;
     type WeightInfo = ();
 }
 
