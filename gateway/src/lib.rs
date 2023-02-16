@@ -38,12 +38,6 @@ pub enum RawOrigin {
     Bridge,
 }
 
-// impl<T: pallet::Config> Into<T::RuntimeOrigin> for RawOrigin<T> {
-//     fn into(self) -> T::RuntimeOrigin {
-//         self as T::RuntimeOrigin
-//     }
-// }
-
 // ----------------------------------------------------------------------------
 // Pallet module
 // ----------------------------------------------------------------------------
