@@ -151,6 +151,13 @@ pub mod pallet {
             index: u32,
             error: DispatchError,
         },
+        ContractCall {
+            sender: T::AccountId,
+            destination_chain: String,
+            destination_contract_address: String,
+            payload_hash: H256,
+            payload: Vec<u8>,
+        },
     }
 
     #[pallet::origin]
@@ -245,6 +252,32 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
+        /// Main entrypoint for outgoing messaging to destination chains
+        #[pallet::call_index(0)]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::call_contract())]
+        pub fn call_contract(
+            origin: OriginFor<T>,
+            destination_chain: String,
+            destination_contract_address: String,
+            payload: Vec<u8>,
+        ) -> DispatchResult {
+            //TODO: It is important that the sender is identified and propagated so
+            // destination chains contracts can apply any authorization needed
+            // the sender might become a Multilocation once we implement XCM &&
+            // ensure_signed might not make sense
+            let who = ensure_signed(origin)?;
+
+            Self::deposit_event(Event::ContractCall {
+                sender: who,
+                destination_chain,
+                destination_contract_address,
+                payload_hash: H256::from_slice(keccak_256(&payload).as_slice()),
+                payload,
+            });
+
+            Ok(())
+        }
+
         /// Executes a batch of calls previously approved by the Axelar Consensus
         ///
         /// command_ids: ordered list of uuid that identify each command within the batch
@@ -253,6 +286,7 @@ pub mod pallet {
         ///
         /// The weight definition taken from Substrate Utility.force_batch, not sure if there is a more succinct and maintainable
         /// way to ensure the call is properly weighted
+        #[pallet::call_index(1)]
         #[pallet::weight({
             let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
             let dispatch_weight = dispatch_infos.iter()
@@ -356,6 +390,7 @@ pub mod pallet {
             Ok(Some(base_weight.saturating_add(weight)).into())
         }
 
+        #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship(new_operators.len() as u32))]
         pub fn transfer_operatorship(
             origin: OriginFor<T>,
@@ -389,6 +424,7 @@ pub mod pallet {
             Ok(())
         }
 
+        #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_contract_call())]
         pub fn approve_contract_call(
             origin: OriginFor<T>,
@@ -424,6 +460,7 @@ pub mod pallet {
             Ok(())
         }
 
+        #[pallet::call_index(4)]
         #[pallet::weight({
             let total_weight = <T as pallet::Config>::WeightInfo::forward_approved_call();
             if <T as pallet::Config>::ApprovedCallForwarder::is_local() {
