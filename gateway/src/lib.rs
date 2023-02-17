@@ -620,7 +620,7 @@ impl<O: Into<Result<RawOrigin, O>> + From<RawOrigin>> EnsureOrigin<O> for Ensure
     }
 
     #[cfg(feature = "runtime-benchmarks")]
-    fn successful_origin() -> Result<O, ()> {
-        unimplemented!()
+    fn successful_origin() -> O {
+        O::from(RawOrigin::Bridge)
     }
 }
