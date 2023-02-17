@@ -252,6 +252,8 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
+        /// Main entrypoint for outgoing messaging to destination chains
+        #[pallet::call_index(0)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::call_contract())]
         pub fn call_contract(
             origin: OriginFor<T>,
@@ -284,6 +286,7 @@ pub mod pallet {
         ///
         /// The weight definition taken from Substrate Utility.force_batch, not sure if there is a more succinct and maintainable
         /// way to ensure the call is properly weighted
+        #[pallet::call_index(1)]
         #[pallet::weight({
             let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
             let dispatch_weight = dispatch_infos.iter()
@@ -387,6 +390,7 @@ pub mod pallet {
             Ok(Some(base_weight.saturating_add(weight)).into())
         }
 
+        #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::transfer_operatorship(new_operators.len() as u32))]
         pub fn transfer_operatorship(
             origin: OriginFor<T>,
@@ -420,6 +424,7 @@ pub mod pallet {
             Ok(())
         }
 
+        #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_contract_call())]
         pub fn approve_contract_call(
             origin: OriginFor<T>,
@@ -455,6 +460,7 @@ pub mod pallet {
             Ok(())
         }
 
+        #[pallet::call_index(4)]
         #[pallet::weight({
             let total_weight = <T as pallet::Config>::WeightInfo::forward_approved_call();
             if <T as pallet::Config>::ApprovedCallForwarder::is_local() {
