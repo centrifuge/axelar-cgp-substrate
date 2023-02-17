@@ -84,15 +84,9 @@ fn transfer_operatorship() {
             BadOrigin,
         );
 
-        let gw_account_id = AxelarGateway::account_id();
         // new_operators vector is empty
         assert_noop!(
-            AxelarGateway::transfer_operatorship(
-                RuntimeOrigin::signed(gw_account_id),
-                vec![],
-                vec![],
-                0u128
-            ),
+            AxelarGateway::transfer_operatorship(RawOrigin::Bridge.into(), vec![], vec![], 0u128),
             Error::<Runtime>::InvalidOperators,
         );
 
@@ -108,7 +102,7 @@ fn transfer_operatorship() {
         EpochForHash::<Runtime>::insert(precomputed_hash, new_epoch);
         assert_noop!(
             AxelarGateway::transfer_operatorship(
-                RuntimeOrigin::signed(gw_account_id),
+                RawOrigin::Bridge.into(),
                 new_operators.clone(),
                 new_weights.clone(),
                 20u128
@@ -119,7 +113,7 @@ fn transfer_operatorship() {
         // Remove hash
         EpochForHash::<Runtime>::remove(precomputed_hash);
         assert_ok!(AxelarGateway::transfer_operatorship(
-            RuntimeOrigin::signed(gw_account_id),
+            RawOrigin::Bridge.into(),
             new_operators.clone(),
             new_weights.clone(),
             20u128
@@ -170,9 +164,8 @@ fn approve_contract_call() {
             BadOrigin,
         );
 
-        let gw_account_id = AxelarGateway::account_id();
         assert_ok!(AxelarGateway::approve_contract_call(
-            RuntimeOrigin::signed(gw_account_id),
+            RawOrigin::Bridge.into(),
             source_chain.clone(),
             source_address.clone(),
             contract_address,
@@ -635,18 +628,18 @@ fn forward_valid_approved_call() {
 
         ContractCallApproved::<Runtime>::set(approved_call_hash, ());
 
-        assert_ok!(AxelarGateway::forward_approved_call(
-            RuntimeOrigin::signed(ALICE),
-            command_id,
-            source_chain,
-            source_address,
-            contract_address,
-            inner_call_bytes,
-        ));
-
-        assert!(!ContractCallApproved::<Runtime>::contains_key(
-            approved_call_hash
-        ))
+        // Inner call - Remark - needs a signed origin so call will fail
+        assert_noop!(
+            AxelarGateway::forward_approved_call(
+                RuntimeOrigin::signed(ALICE),
+                command_id,
+                source_chain,
+                source_address,
+                contract_address,
+                inner_call_bytes,
+            ),
+            BadOrigin
+        );
     });
 }
 

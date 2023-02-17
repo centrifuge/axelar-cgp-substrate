@@ -1,7 +1,6 @@
 use frame_support::{
     construct_runtime, parameter_types,
     traits::{ConstU32, ConstU64, Everything},
-    PalletId,
 };
 use sp_core::H256;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
@@ -40,13 +39,12 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
-    pub const GatewayPalletId: PalletId = crate::traits::GATEWAY_PALLET_ID;
     pub const ChainId: u16 = 36;
 }
 
 impl Config for Runtime {
-    type PalletId = GatewayPalletId;
     type RuntimeEvent = RuntimeEvent;
+    type RuntimeOrigin = RuntimeOrigin;
     type RuntimeCall = RuntimeCall;
     type ChainId = ChainId;
     type ApprovedCallForwarder = LocalCallForwarder;
@@ -63,7 +61,7 @@ construct_runtime!(
         UncheckedExtrinsic = UncheckedExtrinsic,
     {
         System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-        AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Event<T>} = 2,
+        AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Origin, Event<T>} = 2,
     }
 );
 
