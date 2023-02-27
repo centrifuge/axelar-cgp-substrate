@@ -12,16 +12,17 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
+      - name: Prep build on Ubuntu
+        if: ${{ matrix.os }} == 'ubuntu-latest'
+        run: |
+          sudo apt-get install protobuf-compiler
       - name: Install latest nightly
         uses: actions-rs/toolchain@88dc2356392166efad76775c878094f4e83ff746
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           default: true
-      - name: Prep build on Ubuntu
-        if: ${{ matrix.os }} == 'ubuntu-latest'
-        run: |
-          sudo apt-get install protobuf-compiler
-          rustup target add wasm32-unknown-unknown --toolchain $RUST_TOOLCHAIN
+          components: rustfmt
+          target: wasm32-unknown-unknown
       - name: build
         run: cargo build --release
       - name: test

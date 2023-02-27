@@ -4,16 +4,16 @@ mod env;
 mod tests {
     use super::*;
     use codec::Encode;
-
+    use env::{Network, Para1, Para2};
     use frame_support::assert_ok;
     use xcm::latest::prelude::*;
     use xcm_emulator::TestExt;
 
     #[test]
     fn transact_xcm_origins() {
-        env::Network::reset();
+        Network::reset();
 
-        env::Para1::execute_with(|| {
+        Para1::execute_with(|| {
             let inner_call =
                 sample_runtime::RuntimeCall::System(frame_system::Call::remark_with_event {
                     remark: vec![10],
@@ -30,7 +30,7 @@ mod tests {
             ));
         });
 
-        env::Para2::execute_with(|| {
+        Para2::execute_with(|| {
             sample_runtime::System::events()
                 .iter()
                 .for_each(|r| println!(">>> {:#?}", r.event));
