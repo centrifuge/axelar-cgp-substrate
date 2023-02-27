@@ -1,2 +1,2 @@
 [workspace]
-members = ["gateway", "libs/ecdsa"]
+members = ["gateway", "libs/ecdsa", "integration-test", "sample-runtime"]
