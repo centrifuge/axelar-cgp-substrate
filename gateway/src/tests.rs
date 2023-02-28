@@ -5,7 +5,9 @@ use frame_support::{assert_noop, assert_ok};
 use frame_system::Call as SystemCall;
 use mock::*;
 use pallet::Call as AxelarGatewayCall;
+use polkadot_parachain::primitives::Sibling;
 use sp_core::{keccak_256, H160, H256, U256};
+use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::traits::BadOrigin;
 use sp_runtime::DispatchError;
 
@@ -693,15 +695,17 @@ fn contract_call_event_emitted() {
             "0x5f927395213ee6b95de97bddcb1b2b1c0f16844d".to_string();
         let payload: Vec<u8> = [0; 32].encode();
 
+        let origin_para = Sibling(1000.into());
+
         assert_ok!(AxelarGateway::call_contract(
-            RuntimeOrigin::signed(ALICE),
+            RuntimeOrigin::signed(origin_para.into_account_truncating()),
             destination_chain.clone(),
             destination_contract_address.clone(),
             payload.clone()
         ));
 
         event_exists(Event::<Runtime>::ContractCall {
-            sender: ALICE,
+            sender: 1000.to_string(),
             destination_chain,
             destination_contract_address,
             payload_hash: H256::from(keccak_256(payload.as_slice())),

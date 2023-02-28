@@ -7,16 +7,19 @@
 use std::marker::PhantomData;
 // Frame, system and frame primitives
 use crate::Error::ErrorForwarding;
-use crate::{pallet, Config};
+use crate::{pallet, Config, MultiAddress, RawOrigin};
 use codec::Decode;
 use frame_support::dispatch::DispatchResult;
 use frame_support::weights::Weight;
-use frame_system::pallet_prelude::OriginFor;
-use sp_core::H160;
+use sp_core::bounded::WeakBoundedVec;
+use sp_core::{ConstU32, H160};
 use sp_runtime::{traits::Dispatchable, DispatchError};
+use std::str::FromStr;
 use xcm::latest::prelude::*;
 use xcm::latest::Xcm;
 use xcm::prelude::DescendOrigin;
+
+use crate::utils::vec_to_fixed_array;
 
 // ----------------------------------------------------------------------------
 // Traits declaration
@@ -62,7 +65,6 @@ impl WeightInfo for () {
 pub trait CallForwarder<T: pallet::Config> {
     fn is_local() -> bool;
     fn do_forward(
-        origin: OriginFor<T>,
         source_chain: String,
         source_address: String,
         contract_address: H160,
@@ -79,17 +81,28 @@ impl<T: Config> CallForwarder<T> for LocalCallForwarder {
     }
 
     fn do_forward(
-        origin: OriginFor<T>,
-        _source_chain: String,
-        _source_address: String,
+        source_chain: String,
+        source_address: String,
         _contract_address: H160,
         _dest: u32,
         call: Vec<u8>,
     ) -> DispatchResult {
         match <T as Config>::RuntimeCall::decode(&mut &call[..]) {
             Ok(final_call) => {
+                // Add all origin types supported based on the source chains
+                let source_origin = match source_chain.as_str() {
+                    "ethereum" => {
+                        let addr = H160::from_str(source_address.as_str()).unwrap();
+                        RawOrigin::BridgeOnBehalfOf(
+                            vec_to_fixed_array(source_chain.into_bytes()),
+                            MultiAddress::Address20(addr.to_fixed_bytes()),
+                        )
+                    }
+                    _ => return Err(DispatchError::BadOrigin),
+                };
+
                 final_call
-                    .dispatch(origin)
+                    .dispatch(source_origin.into())
                     .map(|_| ())
                     .map_err(|e| e.error)?;
                 Ok(())
@@ -107,29 +120,31 @@ impl<T: Config, XcmSender: SendXcm> CallForwarder<T> for RemoteCallForwarder<Xcm
     }
 
     fn do_forward(
-        _origin: OriginFor<T>,
         source_chain: String,
         source_address: String,
         _contract_address: H160,
         dest: u32,
         call: Vec<u8>,
     ) -> DispatchResult {
-        // let function_prefx = [0,1]; // configurable per sovereign chain
-        // let call_arguments = _source_chain.append(_source_address.encode().append(_call));
-
         // TODO: xcm v2 - review
-        // Named conversion can fail if source_chain is longer than 32b, revisit this
-        let eth_junction = Junction::AccountKey20 {
-            network: NetworkId::Named(
-                source_chain
-                    .into_bytes()
-                    .try_into()
-                    .expect("shorter than length limit; qed"),
-            ),
-            key: H160::from_slice(&hex::decode(source_address).expect("")).to_fixed_bytes(),
+        // Add all origin types supported based on the source chains
+        let origin_junction = match source_chain.as_str() {
+            // Named conversion can fail if source_chain is longer than 32b, revisit this
+            // change to v3 NetworkId::Ethereum(chainId) or ByGenesis
+            "ethereum" => {
+                let addr = H160::from_str(source_address.as_str()).unwrap();
+                Junction::AccountKey20 {
+                    network: NetworkId::Named(WeakBoundedVec::<u8, ConstU32<32>>::force_from(
+                        source_chain.into_bytes(),
+                        None,
+                    )),
+                    key: addr.to_fixed_bytes(),
+                }
+            }
+            _ => return Err(DispatchError::BadOrigin),
         };
 
-        // TODO: dummy multilocation - review
+        // TODO: review fee setup
         let fee_asset = MultiAsset {
             id: Concrete(MultiLocation {
                 parents: 0,
@@ -141,14 +156,16 @@ impl<T: Config, XcmSender: SendXcm> CallForwarder<T> for RemoteCallForwarder<Xcm
         // WIP idea
         let transact_message = Xcm(vec![
             // use xcm v3 when ready
-            DescendOrigin(X1(eth_junction)),
+            // UniversalOrigin(GlobalConsensus(NetworkId::Ethereum(id)))
+            DescendOrigin(X1(origin_junction)),
             WithdrawAsset(fee_asset.clone().into()),
-            // TODO: dummy weight - review
+            // TODO: review unlimited weight
             BuyExecution {
                 fees: fee_asset.into(),
                 weight_limit: WeightLimit::Unlimited,
             },
-            // TODO: dummy transact params - review
+            RefundSurplus,
+            // TODO: review weight
             Transact {
                 origin_type: OriginKind::SovereignAccount,
                 require_weight_at_most: 8_000_000_000,

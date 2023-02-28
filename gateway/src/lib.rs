@@ -19,7 +19,9 @@ use frame_support::dispatch::{extract_actual_weight, GetDispatchInfo, PostDispat
 use frame_support::traits::EnsureOrigin;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_core::RuntimeDebug;
+use sp_core::bounded::BoundedVec;
+use sp_core::{ConstU32, RuntimeDebug};
+use sp_runtime::traits::AccountIdConversion;
 
 #[cfg(test)]
 mod mock;
@@ -27,15 +29,30 @@ mod mock;
 mod tests;
 
 pub mod proof;
+pub mod utils;
 
 // ----------------------------------------------------------------------------
 // Constants
 // ----------------------------------------------------------------------------
 pub const OLD_KEY_RETENTION: u64 = 16;
 
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub type SourceId = [u8; 32];
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum MultiAddress {
+    /// It's some arbitrary raw bytes, weak bounded to 128 bytes.
+    Raw(BoundedVec<u8, ConstU32<128>>),
+    /// It's a 32 byte representation.
+    Address32([u8; 32]),
+    /// Its a 20 byte representation.
+    Address20([u8; 20]),
+}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RawOrigin {
     Bridge,
+    // Only used for local forwarding execution
+    BridgeOnBehalfOf(SourceId, MultiAddress),
 }
 
 // ----------------------------------------------------------------------------
@@ -152,7 +169,7 @@ pub mod pallet {
             error: DispatchError,
         },
         ContractCall {
-            sender: T::AccountId,
+            sender: String,
             destination_chain: String,
             destination_contract_address: String,
             payload_hash: H256,
@@ -244,6 +261,7 @@ pub mod pallet {
         WrongChainId,
         ContractCallNotApproved,
         ErrorForwarding,
+        InvalidOrigin,
     }
 
     // ------------------------------------------------------------------------
@@ -261,14 +279,15 @@ pub mod pallet {
             destination_contract_address: String,
             payload: Vec<u8>,
         ) -> DispatchResult {
-            //TODO: It is important that the sender is identified and propagated so
-            // destination chains contracts can apply any authorization needed
-            // the sender might become a Multilocation once we implement XCM &&
-            // ensure_signed might not make sense
+            // Only a parachain can call this function
+            // TODO: Maybe combine this block into a custom EnsureParachainOnly function
             let who = ensure_signed(origin)?;
+            let para_id = polkadot_parachain::primitives::Sibling::try_from_account(&who)
+                .ok_or(Error::<T>::InvalidOrigin)?;
 
             Self::deposit_event(Event::ContractCall {
-                sender: who,
+                // Potentially concatenate here the BridgeHub ChainId in a format like `bridgehub_id/source_para_id`
+                sender: para_id.0.to_string(),
                 destination_chain,
                 destination_contract_address,
                 payload_hash: H256::from_slice(keccak_256(&payload).as_slice()),
@@ -504,7 +523,6 @@ pub mod pallet {
             let dest = CommandExecuted::<T>::get(command_id);
 
             T::ApprovedCallForwarder::do_forward(
-                RawOrigin::Bridge.into(),
                 source_chain,
                 source_address,
                 contract_address,
@@ -653,11 +671,32 @@ impl<O: Into<Result<RawOrigin, O>> + From<RawOrigin>> EnsureOrigin<O> for Ensure
     fn try_origin(o: O) -> Result<Self::Success, O> {
         o.into().and_then(|o| match o {
             RawOrigin::Bridge => Ok(()),
+            RawOrigin::BridgeOnBehalfOf(_, _) => Err(o.into()),
         })
     }
 
     #[cfg(feature = "runtime-benchmarks")]
     fn successful_origin() -> O {
         O::from(RawOrigin::Bridge)
+    }
+}
+
+// Example of EnsureOrigin check for the target pallet function in a local execution
+pub struct EnsureGatewayOnBehalfOf;
+impl<O: Into<Result<RawOrigin, O>> + From<RawOrigin>> EnsureOrigin<O> for EnsureGatewayOnBehalfOf {
+    type Success = (SourceId, MultiAddress);
+    fn try_origin(o: O) -> Result<Self::Success, O> {
+        o.into().and_then(|o| match o {
+            RawOrigin::BridgeOnBehalfOf(id, addr) => Ok((id.into(), addr.into())),
+            RawOrigin::Bridge => Err(o.into()),
+        })
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn successful_origin() -> O {
+        O::from(RawOrigin::BridgeOnBehalfOf(
+            utils::vec_to_fixed_array("ethereum".into_bytes()),
+            1000.into(),
+        ))
     }
 }
