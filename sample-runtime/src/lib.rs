@@ -7,17 +7,20 @@ use frame_system::EnsureRoot;
 use pallet_xcm::XcmPassthrough;
 use polkadot_parachain::primitives::Sibling;
 use sp_core::H256;
+use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::{
     testing::Header,
     traits::{Convert, IdentityLookup},
     AccountId32,
 };
+use std::borrow::Borrow;
+use std::marker::PhantomData;
 use xcm::latest::prelude::*;
 use xcm_builder::{
-    AccountId32Aliases, AllowUnpaidExecutionFrom, EnsureXcmOrigin, FixedWeightBounds,
-    LocationInverter, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative,
-    SiblingParachainConvertsVia, SignedAccountId32AsNative, SignedToAccountId32,
-    SovereignSignedViaLocation,
+    AccountId32Aliases, AllowUnpaidExecutionFrom, CurrencyAdapter, EnsureXcmOrigin,
+    FixedWeightBounds, IsConcrete, LocationInverter, ParentIsPreset, RelayChainAsNative,
+    SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative,
+    SignedToAccountId32, SovereignSignedViaLocation,
 };
 use xcm_executor::{Config, XcmExecutor};
 
@@ -74,6 +77,19 @@ impl pallet_balances::Config for Runtime {
     type ReserveIdentifier = [u8; 8];
 }
 
+parameter_types! {
+    pub const LocalChainId: u32 = 36;
+}
+
+impl axelar_cgp::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeOrigin = RuntimeOrigin;
+    type RuntimeCall = RuntimeCall;
+    type ChainId = LocalChainId;
+    type ApprovedCallForwarder = axelar_cgp::traits::RemoteCallForwarder<XcmRouter>;
+    type WeightInfo = ();
+}
+
 impl parachain_info::Config for Runtime {}
 
 parameter_types! {
@@ -83,9 +99,32 @@ parameter_types! {
     pub Ancestry: MultiLocation = Parachain(ParachainInfo::parachain_id().into()).into();
 }
 
+// Needed for the receiving chain to charge for fees,
+// since the Multilocation formed is an X2(ParaId, AccountIdx)
+pub struct SiblingParachainWildcardConvertsVia<ParaId, AccountId>(PhantomData<(ParaId, AccountId)>);
+impl<ParaId: From<u32> + Into<u32> + AccountIdConversion<AccountId>, AccountId: Clone>
+    xcm_executor::traits::Convert<MultiLocation, AccountId>
+    for SiblingParachainWildcardConvertsVia<ParaId, AccountId>
+{
+    fn convert_ref(location: impl Borrow<MultiLocation>) -> Result<AccountId, ()> {
+        match location.borrow() {
+            MultiLocation {
+                parents: 1,
+                interior: X2(Parachain(id), _),
+            } => Ok(ParaId::from(*id).into_account_truncating()),
+            _ => Err(()),
+        }
+    }
+
+    fn reverse_ref(_who: impl Borrow<AccountId>) -> Result<MultiLocation, ()> {
+        unimplemented!()
+    }
+}
+
 pub type LocationToAccountId = (
     ParentIsPreset<AccountId>,
     SiblingParachainConvertsVia<Sibling, AccountId>,
+    SiblingParachainWildcardConvertsVia<Sibling, AccountId>,
     AccountId32Aliases<RelayNetwork, AccountId>,
 );
 
@@ -102,7 +141,21 @@ parameter_types! {
     pub const MaxInstructions: u32 = 100;
 }
 
-pub type LocalAssetTransactor = ();
+/// Means for transacting assets on this chain.
+pub type CurrencyTransactor = CurrencyAdapter<
+    // Use this currency:
+    Balances,
+    // Use this currency when it is a fungible asset matching the given location or name:
+    IsConcrete<RelayLocation>,
+    // Do a simple punn to convert an AccountId32 MultiLocation into a native chain account ID:
+    LocationToAccountId,
+    // Our chain's account ID type (we can't get away without mentioning it explicitly):
+    AccountId,
+    // We don't track any teleports.
+    (),
+>;
+
+pub type LocalAssetTransactor = CurrencyTransactor;
 
 /// The means for routing XCM messages which are not for local execution into
 /// the right message queues.
@@ -219,5 +272,6 @@ construct_runtime!(
         DmpQueue: cumulus_pallet_dmp_queue::{Pallet, Call, Storage, Event<T>},
         CumulusXcm: cumulus_pallet_xcm::{Pallet, Event<T>, Origin},
         PolkadotXcm: pallet_xcm::{Pallet, Call, Event<T>, Origin},
+        AxelarGateway: axelar_cgp::{Pallet, Call, Storage, Origin, Event<T>},
     }
 );

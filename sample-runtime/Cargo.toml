@@ -42,6 +42,7 @@ std = [
     "serde/std",
     "codec/std",
     "scale-info/std",
+    "axelar-cgp/std",
 
     "sp-runtime/std",
     "sp-io/std",

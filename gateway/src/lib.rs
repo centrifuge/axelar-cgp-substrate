@@ -21,7 +21,6 @@ pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_core::bounded::BoundedVec;
 use sp_core::{ConstU32, RuntimeDebug};
-use sp_runtime::traits::AccountIdConversion;
 
 #[cfg(test)]
 mod mock;
@@ -71,10 +70,13 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::traits::IsSubType;
     use frame_system::pallet_prelude::*;
+    use pallet_xcm::ensure_xcm;
     use sp_core::{keccak_256, H160, H256, U256};
     use sp_runtime::traits::Dispatchable;
     use sp_runtime::ArithmeticError;
     use traits::CallForwarder;
+    use xcm::latest::MultiLocation;
+    use xcm::prelude::{Junction, X1, X2};
 
     use super::*;
 
@@ -103,6 +105,7 @@ pub mod pallet {
     //    frame_system::Config<RuntimeOrigin: From<RawOrigin> + Into<Result<RawOrigin, <Self as frame_system::Config>::RuntimeOrigin>>>
     // Then we wouldn't need our own RuntimeOrigin type at all to handle adding bounds.
     frame_system::Config<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+    + pallet_xcm::Config<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
     {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -116,6 +119,12 @@ pub mod pallet {
             + Into<
                 Result<
                     frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>,
+                    <Self as Config>::RuntimeOrigin,
+                >,
+            >
+            + Into<
+                Result<
+                    pallet_xcm::Origin,
                     <Self as Config>::RuntimeOrigin,
                 >,
             >;
@@ -175,6 +184,11 @@ pub mod pallet {
             payload_hash: H256,
             payload: Vec<u8>,
         },
+        SampleFinalCall {
+            sender: String,
+            proxy_chain: String,
+            data: H256,
+        },
     }
 
     #[pallet::origin]
@@ -193,11 +207,11 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn current_epoch)]
-    pub(super) type CurrentEpoch<T: Config> = StorageValue<_, u64, ValueQuery>;
+    pub type CurrentEpoch<T: Config> = StorageValue<_, u64, ValueQuery>;
 
     #[pallet::storage]
     #[pallet::getter(fn hash_for_epoch)]
-    pub(super) type HashForEpoch<T: Config> = StorageMap<
+    pub type HashForEpoch<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         // Epoch
@@ -209,7 +223,7 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn epoch_for_hash)]
-    pub(super) type EpochForHash<T: Config> = StorageMap<
+    pub type EpochForHash<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         // Operators Hash
@@ -221,7 +235,7 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn command_executed)]
-    pub(super) type CommandExecuted<T: Config> = StorageMap<
+    pub type CommandExecuted<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         // Command Id
@@ -233,7 +247,7 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn contract_call_approved)]
-    pub(super) type ContractCallApproved<T: Config> = StorageMap<
+    pub type ContractCallApproved<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         // Hash of contract call uniqueness
@@ -280,14 +294,12 @@ pub mod pallet {
             payload: Vec<u8>,
         ) -> DispatchResult {
             // Only a parachain can call this function
-            // TODO: Maybe combine this block into a custom EnsureParachainOnly function
-            let who = ensure_signed(origin)?;
-            let para_id = polkadot_parachain::primitives::Sibling::try_from_account(&who)
-                .ok_or(Error::<T>::InvalidOrigin)?;
+            let location = ensure_xcm(origin)?;
+            let para_id = Self::is_allowed_origin_multilocation(location)?;
 
             Self::deposit_event(Event::ContractCall {
                 // Potentially concatenate here the BridgeHub ChainId in a format like `bridgehub_id/source_para_id`
-                sender: para_id.0.to_string(),
+                sender: para_id.to_string(),
                 destination_chain,
                 destination_contract_address,
                 payload_hash: H256::from_slice(keccak_256(&payload).as_slice()),
@@ -334,8 +346,8 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             let _ = ensure_signed(origin)?;
 
-            // TODO: Once XCM is enabled this check might not make sense
-            ensure!(chain_id == T::ChainId::get(), Error::<T>::WrongChainId);
+            // TODO: Replace this with a map of authorized parachains
+            // ensure!(chain_id == T::ChainId::get(), Error::<T>::WrongChainId);
 
             ensure!(
                 calls.len() == command_ids.len(),
@@ -532,6 +544,38 @@ pub mod pallet {
 
             Ok(())
         }
+
+        /// This call is an example of how a receiving pallet could deal with the multilocation hierarchy
+        /// so can authorize the caller
+        #[pallet::call_index(5)]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_contract_call())]
+        pub fn sample_final_call(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
+            let origin_location = ensure_xcm(origin)?;
+
+            // Authorize call
+            let origin_data = match origin_location {
+                MultiLocation {
+                    parents: 1,
+                    interior:
+                        X2(
+                            Junction::Parachain(id),
+                            Junction::AccountKey20 {
+                                network: _,
+                                key: acc_id,
+                            },
+                        ),
+                } => Ok((id, acc_id)),
+                _ => Err(Error::<T>::InvalidOrigin),
+            }?;
+
+            Self::deposit_event(Event::SampleFinalCall {
+                proxy_chain: origin_data.0.to_string(),
+                sender: hex::encode(origin_data.1.as_slice()),
+                data: H256::from_slice(keccak_256(&data).as_slice()),
+            });
+
+            Ok(())
+        }
     }
 
     impl<T: Config> Pallet<T> {
@@ -660,6 +704,18 @@ pub mod pallet {
                 Token::Array(commands_token),
                 Token::Array(calls_token),
             ])
+        }
+
+        pub fn is_allowed_origin_multilocation(
+            origin_location: MultiLocation,
+        ) -> Result<u32, Error<T>> {
+            match origin_location {
+                MultiLocation {
+                    parents: 1,
+                    interior: X1(Junction::Parachain(id)),
+                } => Ok(id),
+                _ => Err(Error::<T>::InvalidOrigin),
+            }
         }
     }
 }

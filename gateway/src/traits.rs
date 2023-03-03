@@ -74,6 +74,7 @@ pub trait CallForwarder<T: pallet::Config> {
 }
 
 /// Local Forwarder Default Implementation
+/// Just an example of how a local forwarder/executor could look like
 pub struct LocalCallForwarder;
 impl<T: Config> CallForwarder<T> for LocalCallForwarder {
     fn is_local() -> bool {
@@ -92,7 +93,8 @@ impl<T: Config> CallForwarder<T> for LocalCallForwarder {
                 // Add all origin types supported based on the source chains
                 let source_origin = match source_chain.as_str() {
                     "ethereum" => {
-                        let addr = H160::from_str(source_address.as_str()).unwrap();
+                        let addr = H160::from_str(source_address.as_str())
+                            .map_err(|_| DispatchError::BadOrigin)?;
                         RawOrigin::BridgeOnBehalfOf(
                             vec_to_fixed_array(source_chain.into_bytes()),
                             MultiAddress::Address20(addr.to_fixed_bytes()),
@@ -147,13 +149,12 @@ impl<T: Config, XcmSender: SendXcm> CallForwarder<T> for RemoteCallForwarder<Xcm
         // TODO: review fee setup
         let fee_asset = MultiAsset {
             id: Concrete(MultiLocation {
-                parents: 0,
+                parents: 1,
                 interior: Junctions::Here,
             }),
             fun: Fungible(8_000_000_000),
         };
 
-        // WIP idea
         let transact_message = Xcm(vec![
             // use xcm v3 when ready
             // UniversalOrigin(GlobalConsensus(NetworkId::Ethereum(id)))
@@ -167,7 +168,7 @@ impl<T: Config, XcmSender: SendXcm> CallForwarder<T> for RemoteCallForwarder<Xcm
             RefundSurplus,
             // TODO: review weight
             Transact {
-                origin_type: OriginKind::SovereignAccount,
+                origin_type: OriginKind::Xcm,
                 require_weight_at_most: 8_000_000_000,
                 call: call.into(),
             },

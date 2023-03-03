@@ -1,4 +1,6 @@
 use frame_support::{pallet_prelude::Weight, traits::GenesisBuild};
+use polkadot_parachain::primitives::Sibling;
+use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::AccountId32;
 
 use xcm_emulator::{decl_test_network, decl_test_parachain, decl_test_relay_chain};
@@ -65,7 +67,17 @@ pub fn sample_runtime_ext(para_id: u32) -> sp_io::TestExternalities {
     .unwrap();
 
     pallet_balances::GenesisConfig::<Runtime> {
-        balances: vec![(ALICE, INITIAL_BALANCE)],
+        balances: vec![
+            (ALICE, INITIAL_BALANCE),
+            (
+                Sibling::from(PARA_1_ID).into_account_truncating(),
+                INITIAL_BALANCE,
+            ),
+            (
+                Sibling::from(PARA_2_ID).into_account_truncating(),
+                INITIAL_BALANCE,
+            ),
+        ],
     }
     .assimilate_storage(&mut t)
     .unwrap();
