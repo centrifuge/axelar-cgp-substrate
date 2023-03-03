@@ -85,23 +85,6 @@ impl pallet_xcm::Config for Runtime {
     type AdvertisedXcmVersion = pallet_xcm::CurrentXcmVersion;
 }
 
-// impl pallet_xcm::Config for Runtime {
-//     type RuntimeEvent = RuntimeEvent;
-//     type SendXcmOrigin = ();
-//     type XcmRouter = ();
-//     type ExecuteXcmOrigin = ();
-//     type XcmExecuteFilter = frame_support::traits::Everything;
-//     type XcmExecutor = ();
-//     type XcmTeleportFilter = Everything;
-//     type XcmReserveTransferFilter = Everything;
-//     type Weigher = ();
-//     type LocationInverter = ();
-//     type RuntimeOrigin = RuntimeOrigin;
-//     type RuntimeCall = RuntimeCall;
-//     const VERSION_DISCOVERY_QUEUE_SIZE: u32 = 100;
-//     type AdvertisedXcmVersion = ();
-// }
-
 impl Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type RuntimeOrigin = RuntimeOrigin;
