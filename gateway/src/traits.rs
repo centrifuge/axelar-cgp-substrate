@@ -156,16 +156,15 @@ impl<T: Config, XcmSender: SendXcm> CallForwarder<T> for RemoteCallForwarder<Xcm
         };
 
         let transact_message = Xcm(vec![
-            // use xcm v3 when ready
-            // UniversalOrigin(GlobalConsensus(NetworkId::Ethereum(id)))
-            DescendOrigin(X1(origin_junction)),
             WithdrawAsset(fee_asset.clone().into()),
             // TODO: review unlimited weight
             BuyExecution {
                 fees: fee_asset.into(),
                 weight_limit: WeightLimit::Unlimited,
             },
-            RefundSurplus,
+            // use xcm v3 when ready
+            // UniversalOrigin(GlobalConsensus(NetworkId::Ethereum(id)))
+            DescendOrigin(X1(origin_junction)),
             // TODO: review weight
             Transact {
                 origin_type: OriginKind::Xcm,

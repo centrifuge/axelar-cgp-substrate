@@ -1,3 +1,7 @@
+use frame_support::weights::constants::ExtrinsicBaseWeight;
+use frame_support::weights::{
+    WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
+};
 use frame_support::{
     construct_runtime, parameter_types,
     traits::{Everything, Nothing},
@@ -6,8 +10,10 @@ use frame_support::{
 use frame_system::EnsureRoot;
 use pallet_xcm::XcmPassthrough;
 use polkadot_parachain::primitives::Sibling;
+use smallvec::smallvec;
 use sp_core::H256;
 use sp_runtime::traits::AccountIdConversion;
+use sp_runtime::Perbill;
 use sp_runtime::{
     testing::Header,
     traits::{Convert, IdentityLookup},
@@ -17,10 +23,11 @@ use std::borrow::Borrow;
 use std::marker::PhantomData;
 use xcm::latest::prelude::*;
 use xcm_builder::{
-    AccountId32Aliases, AllowUnpaidExecutionFrom, CurrencyAdapter, EnsureXcmOrigin,
-    FixedWeightBounds, IsConcrete, LocationInverter, ParentIsPreset, RelayChainAsNative,
-    SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative,
-    SignedToAccountId32, SovereignSignedViaLocation,
+    AccountId32Aliases, AllowKnownQueryResponses, AllowSubscriptionsFrom,
+    AllowTopLevelPaidExecutionFrom, CurrencyAdapter, EnsureXcmOrigin, FixedWeightBounds,
+    IsConcrete, LocationInverter, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative,
+    SiblingParachainConvertsVia, SignedAccountId32AsNative, SignedToAccountId32,
+    SovereignSignedViaLocation, TakeWeightCredit, UsingComponents,
 };
 use xcm_executor::{Config, XcmExecutor};
 
@@ -166,7 +173,31 @@ pub type XcmRouter = (
     XcmpQueue,
 );
 
-pub type Barrier = AllowUnpaidExecutionFrom<Everything>;
+pub type Barrier = (
+    TakeWeightCredit,
+    AllowTopLevelPaidExecutionFrom<Everything>,
+    // Expected responses are OK.
+    AllowKnownQueryResponses<PolkadotXcm>,
+    // Subscriptions for version tracking are OK.
+    AllowSubscriptionsFrom<Everything>,
+);
+
+pub struct WeightToFee;
+impl WeightToFeePolynomial for WeightToFee {
+    type Balance = Balance;
+    fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+        // in Polkadot, extrinsic base weight (smallest non-zero weight) is mapped to 1/10 CENT:
+        // in Statemint, we map to 1/10 of that, or 1/100 CENT
+        let p = polkadot_runtime_constants::currency::CENTS;
+        let q = 100 * Balance::from(ExtrinsicBaseWeight::get().ref_time());
+        smallvec![WeightToFeeCoefficient {
+            degree: 1,
+            negative: false,
+            coeff_frac: Perbill::from_rational(p % q, q),
+            coeff_integer: p / q,
+        }]
+    }
+}
 
 pub struct XcmConfig;
 impl Config for XcmConfig {
@@ -179,7 +210,7 @@ impl Config for XcmConfig {
     type LocationInverter = LocationInverter<Ancestry>;
     type Barrier = Barrier;
     type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
-    type Trader = ();
+    type Trader = UsingComponents<WeightToFee, RelayLocation, AccountId, Balances, ()>;
     type ResponseHandler = ();
     type AssetTrap = ();
     type AssetClaims = ();

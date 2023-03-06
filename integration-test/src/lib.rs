@@ -25,14 +25,29 @@ mod tests {
                     remark: vec![10],
                 });
 
+            let fee_asset = MultiAsset {
+                id: Concrete(MultiLocation {
+                    parents: 1,
+                    interior: Junctions::Here,
+                }),
+                fun: Fungible(8_000_000_000),
+            };
+
             assert_ok!(sample_runtime::PolkadotXcm::send_xcm(
                 Here,
                 MultiLocation::new(1, X1(Parachain(2))),
-                Xcm(vec![Transact {
-                    origin_type: OriginKind::SovereignAccount,
-                    require_weight_at_most: 8_000_000_000,
-                    call: inner_call.encode().into(),
-                }]),
+                Xcm(vec![
+                    WithdrawAsset(fee_asset.clone().into()),
+                    BuyExecution {
+                        fees: fee_asset.into(),
+                        weight_limit: WeightLimit::Unlimited,
+                    },
+                    Transact {
+                        origin_type: OriginKind::SovereignAccount,
+                        require_weight_at_most: 8_000_000_000,
+                        call: inner_call.encode().into(),
+                    }
+                ]),
             ));
         });
 
@@ -65,14 +80,29 @@ mod tests {
                     payload: vec![1; 32],
                 });
 
+            let fee_asset = MultiAsset {
+                id: Concrete(MultiLocation {
+                    parents: 1,
+                    interior: Junctions::Here,
+                }),
+                fun: Fungible(8_000_000_000),
+            };
+
             assert_ok!(sample_runtime::PolkadotXcm::send_xcm(
                 Here,
                 MultiLocation::new(1, X1(Junction::Parachain(2))),
-                Xcm(vec![Transact {
-                    origin_type: OriginKind::Xcm,
-                    require_weight_at_most: 8_000_000_000,
-                    call: inner_call.encode().into(),
-                }]),
+                Xcm(vec![
+                    WithdrawAsset(fee_asset.clone().into()),
+                    BuyExecution {
+                        fees: fee_asset.into(),
+                        weight_limit: WeightLimit::Unlimited,
+                    },
+                    Transact {
+                        origin_type: OriginKind::Xcm,
+                        require_weight_at_most: 8_000_000_000,
+                        call: inner_call.encode().into(),
+                    }
+                ]),
             ));
         });
 
