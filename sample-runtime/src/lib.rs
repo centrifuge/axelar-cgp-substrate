@@ -97,6 +97,12 @@ impl axelar_cgp::Config for Runtime {
     type WeightInfo = ();
 }
 
+impl sample_receiver::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeOrigin = RuntimeOrigin;
+    type WeightInfo = ();
+}
+
 impl parachain_info::Config for Runtime {}
 
 parameter_types! {
@@ -106,32 +112,9 @@ parameter_types! {
     pub Ancestry: MultiLocation = Parachain(ParachainInfo::parachain_id().into()).into();
 }
 
-// Needed for the receiving chain to charge for fees,
-// since the Multilocation formed is an X2(ParaId, AccountIdx)
-pub struct SiblingParachainWildcardConvertsVia<ParaId, AccountId>(PhantomData<(ParaId, AccountId)>);
-impl<ParaId: From<u32> + Into<u32> + AccountIdConversion<AccountId>, AccountId: Clone>
-    xcm_executor::traits::Convert<MultiLocation, AccountId>
-    for SiblingParachainWildcardConvertsVia<ParaId, AccountId>
-{
-    fn convert_ref(location: impl Borrow<MultiLocation>) -> Result<AccountId, ()> {
-        match location.borrow() {
-            MultiLocation {
-                parents: 1,
-                interior: X2(Parachain(id), _),
-            } => Ok(ParaId::from(*id).into_account_truncating()),
-            _ => Err(()),
-        }
-    }
-
-    fn reverse_ref(_who: impl Borrow<AccountId>) -> Result<MultiLocation, ()> {
-        unimplemented!()
-    }
-}
-
 pub type LocationToAccountId = (
     ParentIsPreset<AccountId>,
     SiblingParachainConvertsVia<Sibling, AccountId>,
-    SiblingParachainWildcardConvertsVia<Sibling, AccountId>,
     AccountId32Aliases<RelayNetwork, AccountId>,
 );
 
@@ -304,5 +287,6 @@ construct_runtime!(
         CumulusXcm: cumulus_pallet_xcm::{Pallet, Event<T>, Origin},
         PolkadotXcm: pallet_xcm::{Pallet, Call, Event<T>, Origin},
         AxelarGateway: axelar_cgp::{Pallet, Call, Storage, Origin, Event<T>},
+        SampleReceiver: sample_receiver::{Pallet, Call, Origin, Event<T>},
     }
 );

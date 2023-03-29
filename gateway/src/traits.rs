@@ -67,7 +67,6 @@ pub trait CallForwarder<T: pallet::Config> {
     fn do_forward(
         source_chain: String,
         source_address: String,
-        contract_address: H160,
         dest: u32,
         call: Vec<u8>,
     ) -> DispatchResult;
@@ -84,7 +83,6 @@ impl<T: Config> CallForwarder<T> for LocalCallForwarder {
     fn do_forward(
         source_chain: String,
         source_address: String,
-        _contract_address: H160,
         _dest: u32,
         call: Vec<u8>,
     ) -> DispatchResult {
@@ -124,7 +122,6 @@ impl<T: Config, XcmSender: SendXcm> CallForwarder<T> for RemoteCallForwarder<Xcm
     fn do_forward(
         source_chain: String,
         source_address: String,
-        _contract_address: H160,
         dest: u32,
         call: Vec<u8>,
     ) -> DispatchResult {

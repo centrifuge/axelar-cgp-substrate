@@ -184,11 +184,6 @@ pub mod pallet {
             payload_hash: H256,
             payload: Vec<u8>,
         },
-        SampleFinalCall {
-            sender: String,
-            proxy_chain: String,
-            data: H256,
-        },
     }
 
     #[pallet::origin]
@@ -257,6 +252,33 @@ pub mod pallet {
         ValueQuery,
     >;
 
+    // TODO: Enable this mapping, when receiving and sending requests
+    // We can create an admin function to update this, only updatable by the sovereign paraID.
+    // #[pallet::storage]
+    // #[pallet::getter(fn paraid_domain)]
+    // pub type ParaIdDomain<T: Config> = StorageMap<
+    //     _,
+    //     Blake2_128Concat,
+    //     // paraId
+    //     u32,
+    //     // Domain Id
+    //     String,
+    //     ValueQuery,
+    // >;
+    //
+    //
+    // #[pallet::storage]
+    // #[pallet::getter(fn domain_paraid)]
+    // pub type DomainParaId<T: Config> = StorageMap<
+    //     _,
+    //     Blake2_128Concat,
+    //     // paraId
+    //     String,
+    //     // Domain Id
+    //     u32,
+    //     ValueQuery,
+    // >;
+
     // ------------------------------------------------------------------------
     // Pallet errors
     // ------------------------------------------------------------------------
@@ -293,12 +315,17 @@ pub mod pallet {
             destination_contract_address: String,
             payload: Vec<u8>,
         ) -> DispatchResult {
-            // Only a parachain can call this function
+            // Only a parachain can call this function, because at the end we need the
+            // original ParaId as the source of the message
             let location = ensure_xcm(origin)?;
             let para_id = Self::is_allowed_origin_multilocation(location)?;
 
+            // TODO: Create a storage that maps, ParaIds with its unique string Axelar Domain Id names
+            // bidirectionally, 2000: "Acala", 2006: "Astar", 2031: "Centrifuge" ...
+            // then here from the ParaId, find the correspondent Axelar Domain Id in such storage and
+            // replace as the sender in the event call
+
             Self::deposit_event(Event::ContractCall {
-                // Potentially concatenate here the BridgeHub ChainId in a format like `bridgehub_id/source_para_id`
                 sender: para_id.to_string(),
                 destination_chain,
                 destination_contract_address,
@@ -346,7 +373,10 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             let _ = ensure_signed(origin)?;
 
-            // TODO: Replace this with a map of authorized parachains
+            // TODO: Find the chain_id in the Axelar Domain Id storage, otherwise error
+            // Most likely the chain_id will be a String with names like "Acala", "Centrifuge"
+            // which are the Axelar Domain names, retrieve the ParaID associated to that name and
+            // use it as the chain_id to store in the command, so the approval succeeds later.
             // ensure!(chain_id == T::ChainId::get(), Error::<T>::WrongChainId);
 
             ensure!(
@@ -534,45 +564,7 @@ pub mod pallet {
             // Fetch Parachain Id previously stored when executing command
             let dest = CommandExecuted::<T>::get(command_id);
 
-            T::ApprovedCallForwarder::do_forward(
-                source_chain,
-                source_address,
-                contract_address,
-                dest,
-                call,
-            )?;
-
-            Ok(())
-        }
-
-        /// This call is an example of how a receiving pallet could deal with the multilocation hierarchy
-        /// so can authorize the caller
-        #[pallet::call_index(5)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_contract_call())]
-        pub fn sample_final_call(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
-            let origin_location = ensure_xcm(origin)?;
-
-            // Authorize call
-            let origin_data = match origin_location {
-                MultiLocation {
-                    parents: 1,
-                    interior:
-                        X2(
-                            Junction::Parachain(id),
-                            Junction::AccountKey20 {
-                                network: _,
-                                key: acc_id,
-                            },
-                        ),
-                } => Ok((id, acc_id)),
-                _ => Err(Error::<T>::InvalidOrigin),
-            }?;
-
-            Self::deposit_event(Event::SampleFinalCall {
-                proxy_chain: origin_data.0.to_string(),
-                sender: hex::encode(origin_data.1.as_slice()),
-                data: H256::from_slice(keccak_256(&data).as_slice()),
-            });
+            T::ApprovedCallForwarder::do_forward(source_chain, source_address, dest, call)?;
 
             Ok(())
         }

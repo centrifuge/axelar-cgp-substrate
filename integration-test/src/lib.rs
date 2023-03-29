@@ -155,10 +155,11 @@ mod tests {
             )
             .unwrap();
 
-            let inner_call =
-                sample_runtime::RuntimeCall::AxelarGateway(axelar_cgp::Call::sample_final_call {
+            let inner_call = sample_runtime::RuntimeCall::SampleReceiver(
+                sample_receiver::Call::sample_final_call {
                     data: vec![1, 2, 3],
-                });
+                },
+            );
             let inner_call_bytes = inner_call.encode();
 
             let command_id = H256::random();
@@ -200,11 +201,13 @@ mod tests {
 
             assert!(sample_runtime::System::events().iter().any(|r| matches!(
                 r.event,
-                sample_runtime::RuntimeEvent::AxelarGateway(axelar_cgp::Event::SampleFinalCall {
-                    sender: _,
-                    data: _,
-                    proxy_chain: _,
-                })
+                sample_runtime::RuntimeEvent::SampleReceiver(
+                    sample_receiver::Event::SampleFinalCall {
+                        sender: _,
+                        data: _,
+                        proxy_chain: _,
+                    }
+                )
             )));
         });
     }
@@ -220,10 +223,11 @@ mod tests {
 
         Para1::execute_with(|| {
             // This is the call to be executed in the final parachain
-            let inner_call =
-                sample_runtime::RuntimeCall::AxelarGateway(axelar_cgp::Call::sample_final_call {
+            let inner_call = sample_runtime::RuntimeCall::SampleReceiver(
+                sample_receiver::Call::sample_final_call {
                     data: vec![1, 2, 3],
-                });
+                },
+            );
             let inner_call_bytes: Vec<u8> = inner_call.encode();
 
             /////////// Preparing Execute Batch Payload ///////////
@@ -350,8 +354,8 @@ mod tests {
             // Final call successfully executed across the "wire"
             assert!(sample_runtime::System::events().iter().any(|r| matches!(
                 r.event,
-                sample_runtime::RuntimeEvent::AxelarGateway(
-                    axelar_cgp::Event::SampleFinalCall { .. }
+                sample_runtime::RuntimeEvent::SampleReceiver(
+                    sample_receiver::Event::SampleFinalCall { .. }
                 )
             )));
         });
