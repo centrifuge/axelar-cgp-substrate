@@ -721,7 +721,7 @@ fn contract_call_event_emitted() {
                 destination_contract_address.clone(),
                 payload.clone()
             ),
-            Error::<Runtime>::InvalidOrigin
+            BadOrigin
         );
 
         para_location = MultiLocation::new(1, X1(Junction::Parachain(1000)));

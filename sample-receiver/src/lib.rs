@@ -15,12 +15,9 @@ pub mod traits;
 // Re-export pallet components in crate namespace (for runtime construction)
 use crate::traits::WeightInfo;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::dispatch::{extract_actual_weight, GetDispatchInfo, PostDispatchInfo};
-use frame_support::traits::EnsureOrigin;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_core::bounded::BoundedVec;
-use sp_core::{ConstU32, RuntimeDebug};
+use sp_core::RuntimeDebug;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RawOrigin {
@@ -43,15 +40,11 @@ pub enum RawOrigin {
 #[frame_support::pallet]
 pub mod pallet {
     use frame_support::pallet_prelude::*;
-    use frame_support::traits::IsSubType;
     use frame_system::pallet_prelude::*;
     use pallet_xcm::ensure_xcm;
-    use sp_core::{keccak_256, H160, H256, U256};
-    use sp_runtime::traits::Dispatchable;
-    use sp_runtime::ArithmeticError;
-    use sp_runtime::DispatchError::BadOrigin;
+    use sp_core::{keccak_256, H256};
     use xcm::latest::MultiLocation;
-    use xcm::prelude::{Junction, X1, X2};
+    use xcm::prelude::{Junction, X2};
 
     use super::*;
 

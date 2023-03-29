@@ -10,7 +10,7 @@ use xcm::latest::prelude::*;
 use xcm::opaque::latest::NetworkId;
 use xcm_builder::{EnsureXcmOrigin, FixedWeightBounds, LocationInverter};
 
-use crate::traits::LocalCallForwarder;
+use crate::traits::{EnsureXcm, LocalCallForwarder};
 use crate::{self as pallet_axelar_cgp, Config};
 
 pub type AccountId = u64;
@@ -85,10 +85,15 @@ impl pallet_xcm::Config for Runtime {
     type AdvertisedXcmVersion = pallet_xcm::CurrentXcmVersion;
 }
 
+// parameter_types! {
+//     pub LocalParaId: u32 = ParachainInfo::parachain_id().into();
+// }
+
 impl Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type RuntimeOrigin = RuntimeOrigin;
     type RuntimeCall = RuntimeCall;
+    type EnsureCallOrigin = EnsureXcm;
     type ChainId = ChainId;
     type ApprovedCallForwarder = LocalCallForwarder;
     type WeightInfo = ();

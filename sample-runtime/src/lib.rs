@@ -12,15 +12,12 @@ use pallet_xcm::XcmPassthrough;
 use polkadot_parachain::primitives::Sibling;
 use smallvec::smallvec;
 use sp_core::H256;
-use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::Perbill;
 use sp_runtime::{
     testing::Header,
     traits::{Convert, IdentityLookup},
     AccountId32,
 };
-use std::borrow::Borrow;
-use std::marker::PhantomData;
 use xcm::latest::prelude::*;
 use xcm_builder::{
     AccountId32Aliases, AllowKnownQueryResponses, AllowSubscriptionsFrom,
@@ -92,6 +89,7 @@ impl axelar_cgp::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type RuntimeOrigin = RuntimeOrigin;
     type RuntimeCall = RuntimeCall;
+    type EnsureCallOrigin = axelar_cgp::traits::EnsureXcm;
     type ChainId = LocalChainId;
     type ApprovedCallForwarder = axelar_cgp::traits::RemoteCallForwarder<XcmRouter>;
     type WeightInfo = ();

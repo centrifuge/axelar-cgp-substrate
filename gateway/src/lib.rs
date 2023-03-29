@@ -70,13 +70,10 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::traits::IsSubType;
     use frame_system::pallet_prelude::*;
-    use pallet_xcm::ensure_xcm;
     use sp_core::{keccak_256, H160, H256, U256};
     use sp_runtime::traits::Dispatchable;
     use sp_runtime::ArithmeticError;
     use traits::CallForwarder;
-    use xcm::latest::MultiLocation;
-    use xcm::prelude::{Junction, X1, X2};
 
     use super::*;
 
@@ -105,7 +102,6 @@ pub mod pallet {
     //    frame_system::Config<RuntimeOrigin: From<RawOrigin> + Into<Result<RawOrigin, <Self as frame_system::Config>::RuntimeOrigin>>>
     // Then we wouldn't need our own RuntimeOrigin type at all to handle adding bounds.
     frame_system::Config<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
-    + pallet_xcm::Config<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
     {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -121,12 +117,6 @@ pub mod pallet {
                     frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>,
                     <Self as Config>::RuntimeOrigin,
                 >,
-            >
-            + Into<
-                Result<
-                    pallet_xcm::Origin,
-                    <Self as Config>::RuntimeOrigin,
-                >,
             >;
 
         /// The overarching call type.
@@ -136,6 +126,8 @@ pub mod pallet {
             + From<frame_system::Call<Self>>
             + IsSubType<Call<Self>>
             + IsType<<Self as frame_system::Config>::RuntimeCall>;
+
+        type EnsureCallOrigin: EnsureOrigin<<Self as Config>::RuntimeOrigin, Success = u32>;
 
         /// Self chain Identifier
         #[pallet::constant]
@@ -317,9 +309,8 @@ pub mod pallet {
         ) -> DispatchResult {
             // Only a parachain can call this function, because at the end we need the
             // original ParaId as the source of the message
-            let location = ensure_xcm(origin)?;
-            let para_id = Self::is_allowed_origin_multilocation(location)?;
 
+            let para_id = T::EnsureCallOrigin::ensure_origin(origin)?;
             // TODO: Create a storage that maps, ParaIds with its unique string Axelar Domain Id names
             // bidirectionally, 2000: "Acala", 2006: "Astar", 2031: "Centrifuge" ...
             // then here from the ParaId, find the correspondent Axelar Domain Id in such storage and
@@ -696,18 +687,6 @@ pub mod pallet {
                 Token::Array(commands_token),
                 Token::Array(calls_token),
             ])
-        }
-
-        pub fn is_allowed_origin_multilocation(
-            origin_location: MultiLocation,
-        ) -> Result<u32, Error<T>> {
-            match origin_location {
-                MultiLocation {
-                    parents: 1,
-                    interior: X1(Junction::Parachain(id)),
-                } => Ok(id),
-                _ => Err(Error::<T>::InvalidOrigin),
-            }
         }
     }
 }

@@ -10,9 +10,11 @@ use crate::Error::ErrorForwarding;
 use crate::{pallet, Config, MultiAddress, RawOrigin};
 use codec::Decode;
 use frame_support::dispatch::DispatchResult;
+use frame_support::traits::EnsureOrigin;
 use frame_support::weights::Weight;
+use pallet_xcm::ensure_xcm;
 use sp_core::bounded::WeakBoundedVec;
-use sp_core::{ConstU32, H160};
+use sp_core::{ConstU32, Get, H160};
 use sp_runtime::{traits::Dispatchable, DispatchError};
 use std::str::FromStr;
 use xcm::latest::prelude::*;
@@ -178,5 +180,46 @@ impl<T: Config, XcmSender: SendXcm> CallForwarder<T> for RemoteCallForwarder<Xcm
         XcmSender::send_xcm(dest_multi, transact_message).map_err(|_| ErrorForwarding::<T>)?;
 
         Ok(())
+    }
+}
+
+pub struct EnsureXcm;
+impl<O: Into<Result<pallet_xcm::Origin, O>> + From<pallet_xcm::Origin> + Clone> EnsureOrigin<O>
+    for EnsureXcm
+{
+    type Success = u32;
+
+    fn try_origin(o: O) -> Result<Self::Success, O> {
+        let location = ensure_xcm(o.clone()).map_err(|_| o.clone())?;
+
+        match location {
+            MultiLocation {
+                parents: 1,
+                interior: X1(Junction::Parachain(id)),
+            } => Ok(id),
+            _ => Err(o),
+        }
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn successful_origin() -> O {
+        O::from(pallet_xcm::Origin::Xcm(MultiLocation {
+            parents: 1,
+            interior: Junctions::Here,
+        }))
+    }
+}
+
+pub struct EnsureLocal<ParaId>(PhantomData<ParaId>);
+impl<O, ParaId: Get<u32>> EnsureOrigin<O> for EnsureLocal<ParaId> {
+    type Success = u32;
+
+    fn try_origin(_o: O) -> Result<Self::Success, O> {
+        Ok(ParaId::get())
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn successful_origin() -> O {
+        unimplemented!()
     }
 }
