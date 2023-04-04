@@ -12,10 +12,6 @@
 
 //! Traits used by the Axelar pallet
 
-// ----------------------------------------------------------------------------
-// Module imports and re-exports
-// ----------------------------------------------------------------------------
-
 use std::{marker::PhantomData, str::FromStr};
 
 use codec::Decode;
@@ -31,51 +27,6 @@ use xcm::{
 // Frame, system and frame primitives
 use crate::Error::ErrorForwarding;
 use crate::{pallet, utils::vec_to_fixed_array, Config, MultiAddress, RawOrigin};
-
-// ----------------------------------------------------------------------------
-// Traits declaration
-// ----------------------------------------------------------------------------
-
-/// Weight information for pallet extrinsics
-///
-/// Weights are calculated using runtime benchmarking features.
-/// See [`benchmarking`] module for more information.
-pub trait WeightInfo {
-	fn execute(c: u32) -> Weight;
-	fn transfer_operatorship(c: u32) -> Weight;
-	fn approve_contract_call() -> Weight;
-	fn forward_approved_call() -> Weight;
-	fn call_contract() -> Weight;
-}
-
-// For backwards compatibility and tests
-impl WeightInfo for () {
-	fn execute(c: u32) -> Weight {
-		// Minimum execution time: 13_885 nanoseconds.
-		Weight::from_ref_time(20_147_978 as u64)
-			// Standard Error: 2_232
-			.saturating_add(Weight::from_ref_time(3_516_969 as u64).saturating_mul(c as u64))
-	}
-
-	fn transfer_operatorship(c: u32) -> Weight {
-		// Minimum execution time: 14_470 nanoseconds.
-		Weight::from_ref_time(17_443_346 as u64)
-			// Standard Error: 2_037
-			.saturating_add(Weight::from_ref_time(3_510_555 as u64).saturating_mul(c as u64))
-	}
-
-	fn approve_contract_call() -> Weight {
-		Weight::from_ref_time(17_443_346 as u64)
-	}
-
-	fn forward_approved_call() -> Weight {
-		Weight::from_ref_time(17_443_346 as u64)
-	}
-
-	fn call_contract() -> Weight {
-		Weight::from_ref_time(17_443_346 as u64)
-	}
-}
 
 pub trait CallForwarder<T: pallet::Config> {
 	fn is_local() -> bool;

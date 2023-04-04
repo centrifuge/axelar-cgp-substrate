@@ -14,8 +14,6 @@
 //!
 //! This pallet implements the Axelar Cross-Chain Gateway Protocol
 
-// Ensure we're `no_std` when compiling for WebAssembly.
-#![cfg_attr(not(feature = "std"), no_std)]
 use ethabi::{Address, ParamType, Token};
 use sp_core::{keccak_256, H256};
 

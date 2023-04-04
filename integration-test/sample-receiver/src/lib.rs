@@ -17,12 +17,7 @@
 // Ensure we're `no_std` when compiling for WebAssembly.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// ----------------------------------------------------------------------------
-// Module imports and re-exports
-// ----------------------------------------------------------------------------
-
-// Pallet traits declaration
-pub mod traits;
+pub mod weights;
 
 // Re-export pallet components in crate namespace (for runtime construction)
 use codec::{Decode, Encode, MaxEncodedLen};

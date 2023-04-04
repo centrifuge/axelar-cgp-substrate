@@ -11,6 +11,7 @@
 // GNU General Public License for more details.
 
 use frame_support::weights::Weight;
+use sp_runtime::traits::Zero;
 
 pub trait WeightInfo {
 	fn sample_final_call() -> Weight;
@@ -19,6 +20,6 @@ pub trait WeightInfo {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn sample_final_call() -> Weight {
-		Weight::from_ref_time(17_443_346 as u64)
+		Zero::zero()
 	}
 }
