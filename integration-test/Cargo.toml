@@ -31,7 +31,7 @@ kusama-runtime = { git = "https://github.com/paritytech/polkadot", branch = "rel
 pallet-xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.33" }
 
 xcm-emulator = { git = "https://github.com/shaunxw/xcm-simulator", rev = "c62dbf8e247c03d9797dbf3f1886f74973f2b22a" }
-sample-runtime = { path = "../sample-runtime" }
+sample-runtime = { path = "sample-runtime" }
 axelar-cgp = { path = "../gateway"}
-sample-receiver = { path = "../sample-receiver"}
+sample-receiver = { path = "sample-receiver" }
 ecdsa = { path = "../libs/ecdsa" }

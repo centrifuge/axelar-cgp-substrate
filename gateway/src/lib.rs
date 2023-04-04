@@ -11,6 +11,7 @@
 
 // Pallet traits declaration
 pub mod traits;
+pub mod weights;
 
 // Re-export pallet components in crate namespace (for runtime construction)
 use crate::traits::WeightInfo;
