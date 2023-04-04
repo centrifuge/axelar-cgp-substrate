@@ -10,10 +10,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
+// Ensure we're `no_std` when compiling for WebAssembly.
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use eth_encode_packed::{abi::encode_packed, SolidityDataType};
 use libsecp256k1::{sign, Message, PublicKey, SecretKey};
-use sp_core::{keccak_256, H160, H256};
+use sp_core::{keccak_256, sp_std, H160, H256};
 use sp_io::EcdsaVerifyError;
+use sp_std::vec::Vec;
 
 /// Returns the address that signed a hashed message (`hash`) with
 /// `signature`. This address can then be used for verification purposes.
@@ -30,6 +34,7 @@ pub fn recover(hash: H256, signature: Vec<u8>) -> Result<H160, EcdsaVerifyError>
 
 /// Returns Signature (r,s,v) concatenated
 #[allow(dead_code)]
+#[cfg(feature = "std")]
 pub fn sign_message(msg: H256, secret: &[u8; 32]) -> Vec<u8> {
 	let sec_key = SecretKey::parse(secret);
 	let message = Message::parse(msg.as_fixed_bytes());
@@ -43,6 +48,7 @@ pub fn sign_message(msg: H256, secret: &[u8; 32]) -> Vec<u8> {
 
 /// Generates random Secp256k1 key pair
 #[allow(dead_code)]
+#[cfg(feature = "std")]
 pub fn generate_keypair() -> (Vec<u8>, [u8; 32]) {
 	let secret = SecretKey::random(&mut rand::thread_rng());
 	let public = PublicKey::from_secret_key(&secret);
@@ -53,6 +59,7 @@ pub fn generate_keypair() -> (Vec<u8>, [u8; 32]) {
 /// Returns an Ethereum Signed Message, created from a `hash`. This replicates the behaviour of
 /// the https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign JSON-RPC method.
 #[allow(dead_code)]
+#[cfg(feature = "std")]
 pub fn to_eth_signed_message_hash(hash: [u8; 32]) -> [u8; 32] {
 	let (data, _) = encode_packed(&[
 		SolidityDataType::String("\x19Ethereum Signed Message:\n32"),

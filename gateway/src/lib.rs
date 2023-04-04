@@ -29,7 +29,7 @@ pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_core::{bounded::BoundedVec, ConstU32, RuntimeDebug};
 
-use crate::traits::WeightInfo;
+use crate::weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -39,9 +39,6 @@ mod tests;
 pub mod proof;
 pub mod utils;
 
-// ----------------------------------------------------------------------------
-// Constants
-// ----------------------------------------------------------------------------
 pub const OLD_KEY_RETENTION: u64 = 16;
 
 pub type SourceId = [u8; 32];

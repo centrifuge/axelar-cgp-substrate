@@ -123,10 +123,10 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		ParachainInfo: parachain_info::{Pallet, Storage, Config},
-		PolkadotXcm: pallet_xcm::{Pallet, Call, Config, Origin, Event<T>} = 3,
-		AxelarGateway: pallet_axelar_cgp::{Pallet, Call, Storage, Origin, Event<T>} = 4,
+		System: frame_system,
+		ParachainInfo: parachain_info,
+		PolkadotXcm: pallet_xcm,
+		AxelarGateway: pallet_axelar_cgp,
 	}
 );
 

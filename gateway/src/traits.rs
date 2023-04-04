@@ -15,7 +15,7 @@
 use std::{marker::PhantomData, str::FromStr};
 
 use codec::Decode;
-use frame_support::{dispatch::DispatchResult, traits::EnsureOrigin, weights::Weight};
+use frame_support::{dispatch::DispatchResult, traits::EnsureOrigin};
 use pallet_xcm::ensure_xcm;
 use sp_core::{bounded::WeakBoundedVec, ConstU32, Get, H160};
 use sp_runtime::{traits::Dispatchable, DispatchError};

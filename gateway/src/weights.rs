@@ -27,11 +27,11 @@ pub trait WeightInfo {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn execute(c: u32) -> Weight {
+	fn execute(_c: u32) -> Weight {
 		Zero::zero()
 	}
 
-	fn transfer_operatorship(c: u32) -> Weight {
+	fn transfer_operatorship(_c: u32) -> Weight {
 		Zero::zero()
 	}
 
