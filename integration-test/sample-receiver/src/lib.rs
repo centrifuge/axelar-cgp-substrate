@@ -18,33 +18,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod weights;
-
-// Re-export pallet components in crate namespace (for runtime construction)
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
 
-use crate::traits::WeightInfo;
+use crate::weights::WeightInfo;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RawOrigin {
 	Dummy,
 }
 
-// ----------------------------------------------------------------------------
-// Constants
-// ----------------------------------------------------------------------------
-
-// ----------------------------------------------------------------------------
-// Pallet module
-// ----------------------------------------------------------------------------
-
-// Axelar pallet module
-//
-// The name of the pallet is provided by `construct_runtime` and is used as
-// the unique identifier for the pallet's storage. It is not defined in the
-// pallet itself.
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
@@ -97,13 +82,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	// ------------------------------------------------------------------------
-	// Pallet events
-	// ------------------------------------------------------------------------
-
-	// The macro generates event metadata and derive Clone, Debug, Eq, PartialEq and Codec
 	#[pallet::event]
-	// The macro generates a function on Pallet to deposit an event
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		SampleFinalCall {
@@ -116,22 +95,10 @@ pub mod pallet {
 	#[pallet::origin]
 	pub type Origin = RawOrigin;
 
-	// ------------------------------------------------------------------------
-	// Pallet storage
-	// ------------------------------------------------------------------------
-
-	// ------------------------------------------------------------------------
-	// Pallet errors
-	// ------------------------------------------------------------------------
-
 	#[pallet::error]
 	pub enum Error<T> {
 		InvalidOrigin,
 	}
-
-	// ------------------------------------------------------------------------
-	// Pallet dispatchable functions
-	// ------------------------------------------------------------------------
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -168,4 +135,3 @@ pub mod pallet {
 		}
 	}
 }
-// end of 'pallet' module

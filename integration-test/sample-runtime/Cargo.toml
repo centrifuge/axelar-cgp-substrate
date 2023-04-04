@@ -46,6 +46,7 @@ std = [
     "codec/std",
     "scale-info/std",
     "axelar-cgp/std",
+    "sample-receiver/std",
 
     "sp-runtime/std",
     "sp-io/std",
