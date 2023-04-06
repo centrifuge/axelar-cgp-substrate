@@ -35,7 +35,7 @@ pallet-xcm = { git = "https://github.com/paritytech/polkadot", default-features 
 polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot", default-features = false , branch = "release-v0.9.33" }
 polkadot-runtime-constants = { git = "https://github.com/paritytech/polkadot", default-features = false , branch = "release-v0.9.33" }
 
-axelar-cgp = { path = "../gateway" }
+axelar-cgp = { path = "../../gateway" }
 sample-receiver = { path = "../sample-receiver" }
 
 [features]
@@ -46,6 +46,7 @@ std = [
     "codec/std",
     "scale-info/std",
     "axelar-cgp/std",
+    "sample-receiver/std",
 
     "sp-runtime/std",
     "sp-io/std",
