@@ -1,6 +1,6 @@
 [package]
-name = "axelar-cgp"
-description = "Axelar Cross-Chain Gateway Protocol"
+name = "sample-receiver"
+description = "Just a sample pallet to show case receiving forwarded xcm calls"
 repository = "https://github.com/centrifuge/axelar-cgp-substrate"
 license = "GPL-3.0-only"
 version = "0.0.1-dev"
@@ -17,7 +17,8 @@ scale-info = { version = "2.1.2", default-features = false, features = [
 ethabi = { version = "16.0", default-features = false }
 
 # Local
-ecdsa = { path = "../libs/ecdsa", default-features = false }
+ecdsa = { path = "../../libs/ecdsa", default-features = false }
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 
 # Substrate
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.33" }
@@ -43,12 +44,12 @@ frame-benchmarking = { git = "https://github.com/paritytech/substrate", default-
 xcm-executor = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.33" }
 xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.33" }
 parachain-info = { git = "https://github.com/paritytech/cumulus", branch = "polkadot-v0.9.33" }
-hex = "0.4.3"
 
 
 [features]
 default = ['std']
 std = [
+  "hex/std",
   "scale-info/std",
   "ethabi/std",
   "codec/std",
@@ -76,9 +77,4 @@ runtime-benchmarks = [
   "polkadot-parachain/runtime-benchmarks",
 ]
 
-try-runtime = [
-  "frame-support/try-runtime",
-  "frame-system/try-runtime",
-  "pallet-xcm/try-runtime",
-  "cumulus-pallet-xcm/try-runtime",
-]
+try-runtime = ["frame-support/try-runtime", "frame-system/try-runtime"]
